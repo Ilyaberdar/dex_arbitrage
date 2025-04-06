@@ -49,11 +49,12 @@ npm install @uniswap/v3-core @uniswap/v3-periphery
 │   ├── SwapRouterMock.sol           # Mock Uniswap V3 router
 │   └── UniswapPoolMock.sol          # Mock Uniswap V3 pool
 ├── test/
-│   └── FlashloanArbitrage.test.js   # Test suite
+│   └── FlashloanArbitrage.js   # Test suite
 ├── hardhat.config.js                # Hardhat config
 ├── .env                             # Environment variables
 ├── package.json
 └── README.md
+└── index.js
 ```
 
 ### 🧪 Compile & Test
