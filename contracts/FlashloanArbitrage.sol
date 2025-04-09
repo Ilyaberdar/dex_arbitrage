@@ -10,14 +10,16 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 /**
  * @title FlashloanArbitrage
- * @notice This contract performs a Uniswap V3 flashloan and swaps the borrowed tokens back and forth to profit from arbitrage opportunities.
- * The deal profitability is determined off-chain by a C++ bot. The bot triggers the flashloan only if it detects a profitable arbitrage.
+ * @notice Fully configurable flashloan arbitrage contract. Parameters such as swap fees, minimum profit, and tokens are all passed by an off-chain bot.
  */
 contract FlashloanArbitrage is IUniswapV3FlashCallback, Ownable {
     using SafeERC20 for IERC20;
 
-    address public immutable UNISWAP_POOL;    // Address of the Uniswap V3 pool to borrow from
-    address public immutable UNISWAP_ROUTER;  // Address of the Uniswap V3 router for swaps
+    // Uniswap V3 pool from which the flash loan will be requested
+    address public immutable UNISWAP_POOL;
+
+    // Uniswap V3 router used for swapping tokens
+    address public immutable UNISWAP_ROUTER;
 
     constructor(address pool, address router) Ownable(msg.sender) {
         UNISWAP_POOL = pool;
@@ -25,101 +27,124 @@ contract FlashloanArbitrage is IUniswapV3FlashCallback, Ownable {
     }
 
     /**
-     * @notice Called externally (by your bot) to initiate the flashloan.
-     * @param token0 Address of token0 in the Uniswap pair (the one you're borrowing)
-     * @param token1 Address of token1 in the Uniswap pair (optional, set to address(0) if unused)
-     * @param amount0 Amount of token0 to borrow
-     * @param amount1 Amount of token1 to borrow
-     * The flashloan will automatically trigger uniswapV3FlashCallback(...) with the encoded data.
+     * @notice External call from bot to initiate flashloan
+     * @param token0 The token to borrow via flashloan
+     * @param token1 The intermediate swap token (final return is also in token0)
+     * @param amount0 The amount of token0 to borrow
+     * @param amount1 The amount of token1 to borrow (optional, usually 0)
+     * @param fee0 Fee tier for the first swap (token0 -> token1)
+     * @param fee1 Fee tier for the reverse swap (token1 -> token0)
+     * @param minProfit Minimum expected profit, used for reversion check
      */
-    function requestFlashLoan(address token0, address token1, uint256 amount0, uint256 amount1) external onlyOwner {
-        IUniswapV3Pool(UNISWAP_POOL).flash(address(this), amount0, amount1, abi.encode(token0, token1));
+    function requestFlashLoan(
+        address token0,
+        address token1,
+        uint256 amount0,
+        uint256 amount1,
+        uint24 fee0,
+        uint24 fee1,
+        uint256 minProfit
+    ) external onlyOwner {
+        bytes memory data = abi.encode(token0, token1, fee0, fee1, minProfit);
+        IUniswapV3Pool(UNISWAP_POOL).flash(address(this), amount0, amount1, data);
     }
 
     /**
-     * @notice This callback is triggered by the Uniswap pool after it sends the flashloaned tokens.
-     * Here we perform the arbitrage: token0 → token1 → token0 (or any other logic).
-     * The C++ bot must precompute the expected profit and only call requestFlashLoan if it's profitable.
+     * @notice Callback from Uniswap pool after flashloan execution
+     * @dev Performs the arbitrage logic and ensures repayment + profit
+     * @param fee0 Flashloan fee for token0
+     * @param data Encoded params passed from requestFlashLoan
      */
     function uniswapV3FlashCallback(
         uint256 fee0, // Fee for token0
         uint256 /* fee1 */, // Fee for token1 (currently unused)
         bytes calldata data // Encoded data from the flash call
     ) external override {
-        require(msg.sender == UNISWAP_POOL, "Invalid caller");
+        require(msg.sender == UNISWAP_POOL, "Invalid pool callback");
 
-        (address token0, address token1) = abi.decode(data, (address, address));
+        (
+            address token0,
+            address token1,
+            uint24 feeSwap0,
+            uint24 feeSwap1,
+            uint256 minProfit
+        ) = abi.decode(data, (address, address, uint24, uint24, uint256));
 
-        // ------------------------
-        // Arbitrage for token0
-        // ------------------------
-        uint256 amountIn0 = IERC20(token0).balanceOf(address(this));
-        require(amountIn0 > 0, "Token0: No balance received");
+        // Get the borrowed amount of token0
+        uint256 amountIn = IERC20(token0).balanceOf(address(this));
+        require(amountIn > 0, "No token0 received");
 
-        IERC20(token0).approve(UNISWAP_ROUTER, amountIn0);
+        // Approve Uniswap router to spend token0
+        IERC20(token0).approve(UNISWAP_ROUTER, amountIn);
 
-        ISwapRouter.ExactInputSingleParams memory params0 = ISwapRouter.ExactInputSingleParams({
+        // Swap token0 -> token1
+        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
             tokenIn: token0,
             tokenOut: token1,
-            fee: 3000,
+            fee: feeSwap0,
             recipient: address(this),
             deadline: block.timestamp,
-            amountIn: amountIn0,
+            amountIn: amountIn,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
-        uint256 amountOut0 = ISwapRouter(UNISWAP_ROUTER).exactInputSingle(params0);
+        uint256 swappedOut = ISwapRouter(UNISWAP_ROUTER).exactInputSingle(swapParams);
 
-        IERC20(token1).approve(UNISWAP_ROUTER, amountOut0);
+        // Approve Uniswap router to spend token1
+        IERC20(token1).approve(UNISWAP_ROUTER, swappedOut);
 
-        ISwapRouter.ExactInputSingleParams memory reverseParams0 = ISwapRouter.ExactInputSingleParams({
+        // Swap token1 -> token0
+        ISwapRouter.ExactInputSingleParams memory reverseSwap = ISwapRouter.ExactInputSingleParams({
             tokenIn: token1,
             tokenOut: token0,
-            fee: 3000,
+            fee: feeSwap1,
             recipient: address(this),
             deadline: block.timestamp,
-            amountIn: amountOut0,
+            amountIn: swappedOut,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
-        uint256 finalAmount0 = ISwapRouter(UNISWAP_ROUTER).exactInputSingle(reverseParams0);
-        uint256 requiredRepayment0 = amountIn0 + fee0;
+        uint256 finalAmount = ISwapRouter(UNISWAP_ROUTER).exactInputSingle(reverseSwap);
 
-        require(finalAmount0 >= requiredRepayment0, "Token0: Not profitable");
+        // Calculate what we owe back to the pool
+        uint256 requiredRepayment = amountIn + fee0;
 
-        // Approve the pool to pull repayment for token0
-        IERC20(token0).approve(UNISWAP_POOL, requiredRepayment0);
+        // Check if the operation was profitable
+        require(finalAmount >= requiredRepayment + minProfit, "Not profitable");
+
+        // Approve repayment
+        IERC20(token0).approve(UNISWAP_POOL, requiredRepayment);
     }
 
     /**
-     * @notice Withdraw ERC20 token profit to the owner wallet
+     * @notice Withdraw profit (ERC20 token) to owner
      */
     function withdrawToken(address token) external onlyOwner {
-        uint256 balance = IERC20(token).balanceOf(address(this));
-        require(balance > 0, "Nothing to withdraw");
-        IERC20(token).safeTransfer(owner(), balance);
+        uint256 bal = IERC20(token).balanceOf(address(this));
+        require(bal > 0, "Nothing to withdraw");
+        IERC20(token).safeTransfer(owner(), bal);
     }
 
     /**
-     * @notice Withdraw native ETH (if contract has any)
+     * @notice Withdraw native ETH (if any) to owner
      */
     function withdrawETH() external onlyOwner {
-        uint256 balance = address(this).balance;
-        require(balance > 0, "No ETH to withdraw");
-        payable(owner()).transfer(balance);
+        uint256 bal = address(this).balance;
+        require(bal > 0, "No ETH to withdraw");
+        payable(owner()).transfer(bal);
     }
 
     /**
-     * @notice Returns the current ERC20 token balance held by the contract
+     * @notice Return contract token balance
      */
     function getBalance(address token) external view returns (uint256) {
         return IERC20(token).balanceOf(address(this));
     }
 
     /**
-     * @notice Allows contract to receive ETH if needed by any DEXes
+     * @notice Allow contract to receive ETH from swaps
      */
     receive() external payable {}
 

@@ -100,3 +100,61 @@ module.exports = {
 ```bash
 npx hardhat test
 ```
+
+## 📘 Info: `requestFlashLoan`
+
+```solidity
+function requestFlashLoan(
+    address token0,
+    address token1,
+    uint256 amount0,
+    uint256 amount1
+) external onlyOwner
+```
+
+### Description
+Triggers a flashloan from a Uniswap V3 pool, borrowing `token0` and/or `token1`. After receiving the tokens, Uniswap calls the contract’s `uniswapV3FlashCallback`, where the arbitrage logic is executed.
+
+### Parameters
+| Name      | Type      | Description                                                  |
+|-----------|-----------|--------------------------------------------------------------|
+| `token0`  | `address` | The address of the token to borrow as `amount0`              |
+| `token1`  | `address` | The address of the token to borrow as `amount1` (optional)   |
+| `amount0` | `uint256` | Amount of `token0` to borrow from the pool                  |
+| `amount1` | `uint256` | Amount of `token1` to borrow from the pool                  |
+
+### Access Control
+- ✅ Only callable by the contract owner
+
+### Internally
+1. Encodes data and calls the pool’s `flash()` method
+2. Uniswap V3 automatically calls back `uniswapV3FlashCallback`
+3. Arbitrage logic is executed (swap → swap back → repay)
+4. Reverts if trade isn’t profitable
+
+---
+
+## 🧠 Example Workflow
+
+1. Deploy the contract using:
+```js
+await flashloanContract.deploy(poolAddress, routerAddress);
+```
+
+2. C++ or JS bot monitors on-chain prices
+3. If profitable arbitrage is found, bot calls:
+```js
+await flashloanContract.requestFlashLoan(token0, token1, amount0, amount1);
+```
+4. Profit is collected inside the contract
+5. Call `withdrawToken(token)` or `withdrawETH()` to collect earnings
+
+---
+
+## 📤 Deployment
+
+```bash
+npx hardhat run scripts/deploy.js --network <your_network>
+```
+
+---
