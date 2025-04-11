@@ -5,7 +5,7 @@ const path = require('path')
 const player = require('play-sound')(opts = {})
 const http = require('http')
 const cors = require('cors')
-const Web3 = require('web3')
+const {Web3} = require('web3')
 const axios = require('axios')
 const moment = require('moment-timezone')
 const numeral = require('numeral')
@@ -20,7 +20,7 @@ app.use(cors({credentials: true, origin: '*'}))
 
 // WEB3 CONFIG
 const web3 = new Web3(process.env.RPC_URL)
-web3.eth.accounts.wallet.add(process.env.PRIVATE_KEY)
+web3.eth.accounts.wallet.add("0x"+process.env.PRIVATE_KEY)
 
 // SMART CONTRACTS
 // https://github.com/CryptoManiacsZone/1inchProtocol/blob/master/contracts/OneSplitAudit.sol
