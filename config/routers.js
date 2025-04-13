@@ -1,0 +1,6 @@
+export const ROUTERS = {
+    UniswapV2: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
+    SushiSwap: '0xd9e1CE17f2641F24Ae83637ab66a2cca9C378B9F',
+    ShibaSwap: '0x03f7724180AA6b939894B5Ca4314783B0b36b329'
+  };
+  
