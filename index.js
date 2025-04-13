@@ -10,6 +10,9 @@ const axios = require('axios')
 const moment = require('moment-timezone')
 const numeral = require('numeral')
 const _ = require('lodash')
+const worker_farm = require('worker-farm');
+
+const pair_workers = worker_farm({maxConcurrentWorkers:6}, require.resolve('./workers/pair.js'))
 
 // SERVER CONFIG
 const PORT = process.env.PORT || 5000
@@ -359,6 +362,11 @@ async function checkOrderBook(baseAssetSymbol, quoteAssetSymbol) {
   })
 }
 
+let count = 0
+function pair_worker_callback(count_number) {
+  console.log(`Worker reply on @ ${count_number} ...\n`)
+}
+
 // CHECK MARKETS
 let checkingMarkets = false
 async function checkMarkets() {
@@ -380,6 +388,10 @@ async function checkMarkets() {
     clearInterval(marketChecker)
   }
 
+  count ++
+  console.log(`Worker request for @ ${count} ...\n`)
+  pair_workers({count: count}, pair_worker_callback)
+
   console.log(`Fetching market data @ ${now()} ...\n`)
   checkingMarkets = true
   try {
@@ -389,6 +401,7 @@ async function checkMarkets() {
     await checkOrderBook(WETH, SAI)
     await checkOrderBook(USDC, WETH)
     await checkOrderBook(WETH, USDC)
+
   } catch (error) {
     console.error(error)
     checkingMarkets = false

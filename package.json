@@ -20,6 +20,7 @@
     "moment-timezone": "^0.5.48",
     "numeral": "^2.0.6",
     "lodash": "^4.17.21",
-    "console.table": "^0.10.0"
+    "console.table": "^0.10.0",
+    "worker-farm": "^1.7.0"
   }
 }
