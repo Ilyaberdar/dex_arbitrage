@@ -1,9 +1,9 @@
-import Web3 from 'web3';
-import { ERC20_ABI } from '../../config/erc20ABI.js';
+const { Web3 } = require('web3');
+const { ERC20_ABI } = require('../../config/erc20ABI.js');
 
 const web3 = new Web3(process.env.RPC_URL);
 
-export async function getTokenDecimals(tokenAddress) {
+async function getTokenDecimals(tokenAddress) {
   try {
     const token = new web3.eth.Contract(ERC20_ABI, tokenAddress);
     const decimals = await token.methods.decimals().call();
@@ -13,3 +13,5 @@ export async function getTokenDecimals(tokenAddress) {
     return 18; // fallback default
   }
 }
+
+module.exports = { getTokenDecimals };

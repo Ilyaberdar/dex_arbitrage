@@ -1,5 +1,5 @@
 // config/ERC20_ABI.js
-export const ERC20_ABI = [
+const ERC20_ABI = [
     {
       constant: true,
       inputs: [],
@@ -59,3 +59,4 @@ export const ERC20_ABI = [
     }
   ];
   
+module.exports = { ERC20_ABI };

@@ -1,9 +1,9 @@
-import Web3 from 'web3';
-import pkg from 'bignumber.js';
-import { getTokenDecimals } from './utils/tokenUtils.js';
-import { ERC20_ABI } from '../config/erc20ABI.js';
-import dotenv from 'dotenv';
-import { logger } from '../utils/log.js';
+const { Web3 } = require('web3');
+const pkg = require('bignumber.js');
+const { getTokenDecimals } = require('./utils/tokenUtils.js');
+const { ERC20_ABI } = require('../config/erc20ABI.js');
+const dotenv = require('dotenv');
+const { logger } = require('../utils/log.js');
 
 dotenv.config();
 
@@ -35,7 +35,7 @@ function simulatePriceImpact(balance0, balance1, amountInToken0) {
  * @param {string} token1 - Address of token1 in the pool.
  * @returns {Promise<object|null>} - Object with raw price.
  */
-export async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null) {
+async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null) {
   try {
     const token0Contract = new web3.eth.Contract(ERC20_ABI, token0);
     const token1Contract = new web3.eth.Contract(ERC20_ABI, token1);
@@ -69,3 +69,5 @@ export async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn =
     return null;
   }
 }
+
+module.exports = { getPriceFromV3Pool };
