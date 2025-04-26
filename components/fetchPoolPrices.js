@@ -27,6 +27,9 @@ const getPoolPrices = async () => {
   const currentUniswapPoolPrice = await getPriceFromV3Pool(POOL.UNISWAP_WETH, TOKEN.WETH, TOKEN.USDC, 300, 0.03);
   printRouterPrice('Uniswap V3', currentUniswapPoolPrice);
 
+  const currentUniswapPoolPrice_v2 = await getPriceFromV3Pool(POOL.UNISWAP_WETH_V2, TOKEN.WETH_V2, TOKEN.USDC_V2, 300, 0.03);
+  printRouterPrice('Uniswap V2', currentUniswapPoolPrice_v2);
+
   //const currentSushiSwapPoolPrice = await getPriceFromV3Pool(POOL.SUSHISWAP_WETH, TOKEN.WETH, TOKEN.USDC, 1, 0.03);
   //printRouterPrice('SushiSwap V3', currentSushiSwapPoolPrice);
 };
