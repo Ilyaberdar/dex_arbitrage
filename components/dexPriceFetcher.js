@@ -47,10 +47,12 @@ async function getV3PriceNormalized(poolAddress, token0, token1) {
     getTokenDecimals(token1)
   ]);
 
-  const sqrtPriceX96 = BigInt(slot0.sqrtPriceX96.toString());
+  const sqrtPriceX96 = slot0.sqrtPriceX96;
 
-  const priceX192 = sqrtPriceX96 * sqrtPriceX96;
-  const price = priceX192 / (2n ** 192n);
+  //const priceX192 = sqrtPriceX96 * sqrtPriceX96;
+  //const price = priceX192 / (2n ** 192n);
+
+  const price = (sqrtPriceX96 * sqrtPriceX96) / (2n ** 192n);
 
   const scaleFactor = (10n ** BigInt(decimals0)) / (10n ** BigInt(decimals1));
   const normalizedPrice = price * scaleFactor;
@@ -102,7 +104,7 @@ async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null, 
       tokenBalance0: balance0,
       tokenBalance1: balance1,
       currentPrice: rawPrice,
-      NormalizedPrice: pricepriceFormatted,
+      NormalizedPrice: normalizedPrice,
       PriceImpact: priceImpact,
       BlockNumber: blockNumber
     };
