@@ -4,12 +4,14 @@ const pkg = require('bignumber.js');
 const { getTokenDecimals } = require('./utils/tokenUtils.js');
 const { ERC20_ABI } = require('../config/erc20ABI.js');
 const { UNISWAP_V3_POOL_ABI } = require('../config/uniswapV3PoolABI.js');
+const { UNISWAP_V2_POOL_ABI } = require('../config/uniswapV2PoolABI.js');
 const dotenv = require('dotenv');
 const { logger } = require('../utils/log.js');
 
 dotenv.config();
 
 const { BigNumber } = pkg;
+
 const web3 = new Web3(process.env.RPC_URL);
 const provider = new ethers.JsonRpcProvider('https://eth-mainnet.g.alchemy.com/v2/2S3IoADMLVdnijcimHMG9bzqpGhQ-Hgn');
 
@@ -110,4 +112,82 @@ async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null, 
   }
 }
 
-module.exports = { getPriceFromV3Pool };
+/**
+ * @param {string|bigint} balance
+ * @param {number} decimals
+ * @returns {number}
+ */
+function normalizeBalance(balance, decimals) {
+  return Number(balance) / (10 ** decimals);
+}
+
+const UNISWAP_V2_FEE_NUMERATOR = 997n;
+const UNISWAP_V2_FEE_DENOMINATOR = 1000n;
+const DEFAULT_AMOUNT_IN = '1000000000000000000';
+
+/**
+ * Get token price from a specific Uniswap V2 pool via token balances.
+ * @param {string} poolAddress - Address of the Uniswap V2 pool.
+ * @param {string} token0 - Address of token0 in the pool.
+ * @param {string} token1 - Address of token1 in the pool.
+ * @returns {Promise<object|null>} - Object with raw price.
+ */
+async function getPriceFromV2Pool(poolAddress, token0, token1, amountIn = null, fee = null) {
+  const poolContract = new web3.eth.Contract(UNISWAP_V2_POOL_ABI, poolAddress);
+
+  const [poolToken0, poolToken1] = await Promise.all([
+    poolContract.methods.token0().call(),
+    poolContract.methods.token1().call()
+  ]);
+
+  const reserves = await poolContract.methods.getReserves().call();
+  const reserve0 = BigInt(reserves._reserve0);
+  const reserve1 = BigInt(reserves._reserve1);
+
+  const [decimals0, decimals1] = await Promise.all([
+    getTokenDecimals(poolToken0),
+    getTokenDecimals(poolToken1)
+  ]);
+
+  let reserveIn, reserveOut;
+
+  if (token0.toLowerCase() === poolToken0.toLowerCase() && token1.toLowerCase() === poolToken1.toLowerCase()) {
+    reserveIn = reserve0;
+    reserveOut = reserve1;
+  } else if (token0.toLowerCase() === poolToken1.toLowerCase() && token1.toLowerCase() === poolToken0.toLowerCase()) {
+    reserveIn = reserve1;
+    reserveOut = reserve0;
+    balance0 = reserve1;
+    balance1 = reserve0;
+  } else {
+    throw new Error('Provided tokens do not match the pool tokens.');
+  }
+
+  const inputAmount = amountIn ? BigInt(amountIn) : BigInt(DEFAULT_AMOUNT_IN);
+
+  const amountInWithFee = inputAmount * UNISWAP_V2_FEE_NUMERATOR;
+  const numerator = amountInWithFee * reserveOut;
+  const denominator = reserveIn * UNISWAP_V2_FEE_DENOMINATOR + amountInWithFee;
+  const amountOut = numerator / denominator;
+
+  const normalizedReserve0 = Number(reserve0) / (10 ** decimals0);
+  const normalizedReserve1 = Number(reserve1) / (10 ** decimals1);
+
+  const realPrice = normalizedReserve1 / normalizedReserve0;
+  const priceFormatted = Number(amountOut) / Number(inputAmount);
+  const expectedPrice = Number(reserveOut) / Number(reserveIn);
+  const priceImpact = expectedPrice > 0 ? (expectedPrice - priceFormatted) / expectedPrice : 0;
+  const blockNumber = await web3.eth.getBlockNumber();
+
+  return {
+    tokenBalance0: normalizedReserve0,
+    tokenBalance1: normalizedReserve1,
+    currentPrice: realPrice,
+    NormalizedPrice: priceFormatted,
+    PriceImpact: priceImpact,
+    BlockNumber: blockNumber
+  };
+}
+
+
+module.exports = { getPriceFromV3Pool, getPriceFromV2Pool };
