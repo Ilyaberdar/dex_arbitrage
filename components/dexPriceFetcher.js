@@ -1,7 +1,9 @@
 const { Web3 } = require('web3');
+const { ethers } = require('ethers');
 const pkg = require('bignumber.js');
 const { getTokenDecimals } = require('./utils/tokenUtils.js');
 const { ERC20_ABI } = require('../config/erc20ABI.js');
+const { UNISWAP_V3_POOL_ABI } = require('../config/uniswapV3PoolABI.js');
 const dotenv = require('dotenv');
 const { logger } = require('../utils/log.js');
 
@@ -9,6 +11,7 @@ dotenv.config();
 
 const { BigNumber } = pkg;
 const web3 = new Web3(process.env.RPC_URL);
+const provider = new ethers.JsonRpcProvider('https://eth-mainnet.g.alchemy.com/v2/2S3IoADMLVdnijcimHMG9bzqpGhQ-Hgn');
 
 /**
  * Simulate price change in the pool after swapping a given amount of token0 to token1
@@ -17,8 +20,8 @@ const web3 = new Web3(process.env.RPC_URL);
  * @param {BigNumber} amountInToken0 - Amount of token0 to add (e.g. via flashloan)
  * @returns {string} - New price after swap
  */
-function simulatePriceImpact(balance0, balance1, amountInToken0) {
-  const newBalance0 = balance0.plus(amountInToken0);
+function simulatePriceImpact(balance0, balance1, amountInToken0, fee) {
+  const newBalance0 = balance0.plus(amountInToken0.times(1 - fee));
 
   // Constant product: x * y = k => new y = k / new x
   const k = balance0.times(balance1);
@@ -28,6 +31,31 @@ function simulatePriceImpact(balance0, balance1, amountInToken0) {
   return priceAfter;
 }
 
+function calculatePriceImpact(currentPrice, priceAfterSwap) {
+  const impact = ((priceAfterSwap / currentPrice) - 1) * 100;
+  return impact.toFixed(6);
+}
+
+async function getV3PriceNormalized(poolAddress, token0, token1) {
+  const pool = new ethers.Contract(poolAddress, UNISWAP_V3_POOL_ABI, provider);
+
+  const [slot0, decimals0, decimals1] = await Promise.all([
+    pool.slot0(),
+    getTokenDecimals(token0),
+    getTokenDecimals(token1)
+  ]);
+
+  const sqrtPriceX96 = BigInt(slot0.sqrtPriceX96.toString());
+
+  const priceX192 = sqrtPriceX96 * sqrtPriceX96;
+  const price = priceX192 / (2n ** 192n);
+
+  const scaleFactor = (10n ** BigInt(decimals0)) / (10n ** BigInt(decimals1));
+  const normalizedPrice = price * scaleFactor;
+
+  return normalizedPrice.toString();
+}
+
 /**
  * Get token price from a specific Uniswap V3 pool via token balances.
  * @param {string} poolAddress - Address of the Uniswap V3 pool.
@@ -35,7 +63,7 @@ function simulatePriceImpact(balance0, balance1, amountInToken0) {
  * @param {string} token1 - Address of token1 in the pool.
  * @returns {Promise<object|null>} - Object with raw price.
  */
-async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null) {
+async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null, fee = null) {
   try {
     const token0Contract = new web3.eth.Contract(ERC20_ABI, token0);
     const token1Contract = new web3.eth.Contract(ERC20_ABI, token1);
@@ -55,14 +83,26 @@ async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null) 
     let priceAfterSwap = null;
     if (amountIn) {
       const amountInBN = new BigNumber(amountIn);
-      priceAfterSwap = simulatePriceImpact(balance0, balance1, amountInBN);
+      priceAfterSwap = simulatePriceImpact(balance0, balance1, amountInBN, fee || 0.003);
     }
+
+    let blockNumber = null;
+    provider.getBlockNumber().then((result) => {
+      blockNumber = result;
+    });
+
+    const normalizedPrice = await getV3PriceNormalized(poolAddress, token0, token1);
+    const pricepriceFormatted = Number(normalizedPrice) / 1e18;
+
+    const priceImpact = calculatePriceImpact(rawPrice, priceAfterSwap);
 
     return {
       tokenBalance0: balance0,
       tokenBalance1: balance1,
       currentPrice: rawPrice,
-      ...(priceAfterSwap && { simulatedPrice: priceAfterSwap })
+      NormalizedPrice: pricepriceFormatted,
+      PriceImpact: priceImpact,
+      BlockNumber: blockNumber
     };
   } catch (err) {
     logger.error(`[ERROR]: Failed to fetch price from pool (${poolAddress}): ${err.message}`);

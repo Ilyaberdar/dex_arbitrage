@@ -14,20 +14,21 @@ const printRouterPrice = (label, data) => {
   logger.info(`Circulation for token 0: ${data.tokenBalance0}`);
   logger.info(`Circulation for token 1: ${data.tokenBalance1}`);
   logger.info(`Current Pool Price: ${data.currentPrice} USDC`);
-  logger.info(`Simulate Price Impact: ${data.simulatedPrice} USDC`);
+  logger.info(`Normalized V3 Price: ${data.NormalizedPrice} USDC`);
+  logger.info(`Price Impact: ${data.PriceImpact} %`);
+  logger.info(`Block Number: ${data.BlockNumber}`);
 };
 
 
 const getPoolPrices = async () => {
   //const currentUniswapPoolPrice = await getPriceFromV3Pool(POOL.UNISWAP_WBTC, TOKEN.WBTC, TOKEN.USDC /*,1*/); //@note: amountIn param to pass in the equivalent of a token in the pool 
   //const currentSushiSwapPoolPrice = await getPriceFromV3Pool(POOL.SUSHISWAP_WBTC, TOKEN.WBTC, TOKEN.USDC);
-  logger.info(`Start:`);
 
-  const currentUniswapPoolPrice = await getPriceFromV3Pool(POOL.UNISWAP_WETH, TOKEN.WETH, TOKEN.USDC /*,1*/);
-  const currentSushiSwapPoolPrice = await getPriceFromV3Pool(POOL.SUSHISWAP_WETH, TOKEN.WETH, TOKEN.USDC);
-
+  const currentUniswapPoolPrice = await getPriceFromV3Pool(POOL.UNISWAP_WETH, TOKEN.WETH, TOKEN.USDC, 300, 0.03);
   printRouterPrice('Uniswap V3', currentUniswapPoolPrice);
-  printRouterPrice('SushiSwap V3', currentSushiSwapPoolPrice);
+
+  //const currentSushiSwapPoolPrice = await getPriceFromV3Pool(POOL.SUSHISWAP_WETH, TOKEN.WETH, TOKEN.USDC, 1, 0.03);
+  //printRouterPrice('SushiSwap V3', currentSushiSwapPoolPrice);
 };
 
 getPoolPrices();
