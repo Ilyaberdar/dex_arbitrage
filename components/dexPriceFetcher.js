@@ -94,7 +94,7 @@ async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null, 
     });
 
     const normalizedPrice = await getV3PriceNormalized(poolAddress, token0, token1);
-    const pricepriceFormatted = Number(normalizedPrice) / 1e18;
+    const pricepriceFormatted = normalizedPrice;
 
     const priceImpact = calculatePriceImpact(rawPrice, priceAfterSwap);
 

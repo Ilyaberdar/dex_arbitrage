@@ -21,14 +21,15 @@ const printRouterPrice = (label, data) => {
 
 
 const getPoolPrices = async () => {
-  //const currentUniswapPoolPrice = await getPriceFromV3Pool(POOL.UNISWAP_WBTC, TOKEN.WBTC, TOKEN.USDC /*,1*/); //@note: amountIn param to pass in the equivalent of a token in the pool 
+  const currentUniswapPoolPrice = await getPriceFromV3Pool(POOL.UNISWAP_ETH_V3, TOKEN.WETH, TOKEN.USDT_V2, 1, 0.03); //@note: amountIn param to pass in the equivalent of a token in the pool 
+  printRouterPrice('Uniswap V3', currentUniswapPoolPrice);
   //const currentSushiSwapPoolPrice = await getPriceFromV3Pool(POOL.SUSHISWAP_WBTC, TOKEN.WBTC, TOKEN.USDC);
 
   //const currentUniswapPoolPrice = await getPriceFromV3Pool(POOL.UNISWAP_WETH, TOKEN.WETH, TOKEN.USDC, 300, 0.03);
   //printRouterPrice('Uniswap V3', currentUniswapPoolPrice);
 
-  const currentUniswapPoolPriceV2 = await getPriceFromV2Pool(POOL.UNISWAP_ETH_V2, TOKEN.WETH, TOKEN.USDC, 300, 0.03);
-  printRouterPrice('Uniswap V2', currentUniswapPoolPriceV2);
+  //const currentUniswapPoolPriceV2 = await getPriceFromV2Pool(POOL.UNISWAP_ETH_V2, TOKEN.WETH, TOKEN.USDC, 300, 0.03);
+  //printRouterPrice('Uniswap V2', currentUniswapPoolPriceV2);
 
   //const currentSushiSwapPoolPrice = await getPriceFromV3Pool(POOL.SUSHISWAP_WETH, TOKEN.WETH, TOKEN.USDC, 1, 0.03);
   //printRouterPrice('SushiSwap V3', currentSushiSwapPoolPrice);
