@@ -96,7 +96,7 @@ async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null, 
     });
 
     const normalizedPrice = await getV3PriceNormalized(poolAddress, token0, token1);
-    const pricepriceFormatted = Number(normalizedPrice) / 1e18;
+    const pricepriceFormatted = normalizedPrice;
 
     const priceImpact = calculatePriceImpact(rawPrice, priceAfterSwap);
 
@@ -175,7 +175,7 @@ async function getPriceFromV2Pool(poolAddress, token0, token1, amountIn = null, 
   const normalizedReserve0 = Number(reserve0) / (10 ** decimals0);
   const normalizedReserve1 = Number(reserve1) / (10 ** decimals1);
 
-  const realPrice = normalizedReserve1 / normalizedReserve0;
+  const realPrice = normalizedReserve0 / normalizedReserve1;
   const priceFormatted = Number(amountOut) / Number(inputAmount);
   const expectedPrice = Number(reserveOut) / Number(reserveIn);
   const priceImpact = expectedPrice > 0 ? (expectedPrice - priceFormatted) / expectedPrice : 0;
