@@ -1,7 +1,8 @@
 // testPriceFetch.js
 const { getPriceFromV3Pool, getPriceFromV2Pool } = require('./dexPriceFetcher.js');
-const { TOKEN } = require('../config/tokens.js');
-const { POOL } = require('../config/liquidityPool.js');
+const { TOKEN_ETH, TOKEN_ARB } = require('../config/tokens.js');
+const { ETH_NETWORK_POOL, ARB_NETWORK_POOL } = require('../config/liquidityPool.js');
+const { RPC } = require('../config/rpcNetworks.js');
 const { logger } = require('../utils/log.js');
 
 const printRouterPrice = (label, data) => {
@@ -16,23 +17,20 @@ const printRouterPrice = (label, data) => {
   logger.info(`Current Pool Price: ${data.currentPrice} USDC`);
   logger.info(`Normalized V3 Price: ${data.NormalizedPrice} USDC`);
   logger.info(`Price Impact: ${data.PriceImpact} %`);
-  logger.info(`Block Number: ${data.BlockNumber}`);
 };
 
 
-const getPoolPrices = async () => {
-  const currentUniswapPoolPrice = await getPriceFromV3Pool(POOL.UNISWAP_ETH_V3, TOKEN.WETH, TOKEN.USDT_V2, 1, 0.03); //@note: amountIn param to pass in the equivalent of a token in the pool 
-  printRouterPrice('Uniswap V3', currentUniswapPoolPrice);
-  //const currentSushiSwapPoolPrice = await getPriceFromV3Pool(POOL.SUSHISWAP_WBTC, TOKEN.WBTC, TOKEN.USDC);
+const getPoolPricesEthNetwork = async () => {
+  const currentSushiSwapPoolPrice = await getPriceFromV3Pool(RPC.ETHEREUM, ETH_NETWORK_POOL.UNISWAP_WBTC, TOKEN_ETH.WBTC, TOKEN_ETH.USDC, 300, 0.03);
+  printRouterPrice('Uniswap V3 Ethereum', currentSushiSwapPoolPrice);
 
   //const currentUniswapPoolPrice = await getPriceFromV3Pool(POOL.UNISWAP_WETH, TOKEN.WETH, TOKEN.USDC, 300, 0.03);
   //printRouterPrice('Uniswap V3', currentUniswapPoolPrice);
-
-  //const currentUniswapPoolPriceV2 = await getPriceFromV2Pool(POOL.UNISWAP_ETH_V2, TOKEN.WETH, TOKEN.USDC, 300, 0.03);
-  //printRouterPrice('Uniswap V2', currentUniswapPoolPriceV2);
-
-  //const currentSushiSwapPoolPrice = await getPriceFromV3Pool(POOL.SUSHISWAP_WETH, TOKEN.WETH, TOKEN.USDC, 1, 0.03);
-  //printRouterPrice('SushiSwap V3', currentSushiSwapPoolPrice);
 };
 
-getPoolPrices();
+const getPoolPricesArbNetwork = async () => {
+  const currentSushiSwapPoolPrice = await getPriceFromV3Pool(RPC.ARBITRUM, ARB_NETWORK_POOL.UNISWAP_ETH_V3, TOKEN_ARB.WETH, TOKEN_ARB.USDC, 300, 0.03);
+  printRouterPrice('Uniswap V3 Arbitrum', currentSushiSwapPoolPrice);
+};
+
+getPoolPricesArbNetwork();

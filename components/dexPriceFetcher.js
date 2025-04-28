@@ -5,15 +5,8 @@ const { getTokenDecimals } = require('./utils/tokenUtils.js');
 const { ERC20_ABI } = require('../config/erc20ABI.js');
 const { UNISWAP_V3_POOL_ABI } = require('../config/uniswapV3PoolABI.js');
 const { UNISWAP_V2_POOL_ABI } = require('../config/uniswapV2PoolABI.js');
-const dotenv = require('dotenv');
 const { logger } = require('../utils/log.js');
-
-dotenv.config();
-
 const { BigNumber } = pkg;
-
-const web3 = new Web3(process.env.RPC_URL);
-const provider = new ethers.JsonRpcProvider('https://eth-mainnet.g.alchemy.com/v2/2S3IoADMLVdnijcimHMG9bzqpGhQ-Hgn');
 
 /**
  * Simulate price change in the pool after swapping a given amount of token0 to token1
@@ -38,26 +31,27 @@ function calculatePriceImpact(currentPrice, priceAfterSwap) {
   return impact.toFixed(6);
 }
 
-async function getV3PriceNormalized(poolAddress, token0, token1) {
+async function getV3PriceNormalized(rpc, poolAddress, token0, token1) {
+  const provider = new ethers.JsonRpcProvider(rpc);
   const pool = new ethers.Contract(poolAddress, UNISWAP_V3_POOL_ABI, provider);
 
   const [slot0, decimals0, decimals1] = await Promise.all([
     pool.slot0(),
-    getTokenDecimals(token0),
-    getTokenDecimals(token1)
+    getTokenDecimals(rpc, token0),
+    getTokenDecimals(rpc, token1)
   ]);
 
   const sqrtPriceX96 = slot0.sqrtPriceX96;
+  const priceX192 = sqrtPriceX96 * sqrtPriceX96;
 
-  //const priceX192 = sqrtPriceX96 * sqrtPriceX96;
-  //const price = priceX192 / (2n ** 192n);
+  let price = Number(priceX192) / Number(2n ** 192n);
+  price = price * (10 ** (decimals0 - decimals1))
 
-  const price = (sqrtPriceX96 * sqrtPriceX96) / (2n ** 192n);
+  if (price < 1e-6) {
+    price = 1 / price;
+  }
 
-  const scaleFactor = (10n ** BigInt(decimals0)) / (10n ** BigInt(decimals1));
-  const normalizedPrice = price * scaleFactor;
-
-  return normalizedPrice.toString();
+  return price;
 }
 
 /**
@@ -67,8 +61,9 @@ async function getV3PriceNormalized(poolAddress, token0, token1) {
  * @param {string} token1 - Address of token1 in the pool.
  * @returns {Promise<object|null>} - Object with raw price.
  */
-async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null, fee = null) {
+async function getPriceFromV3Pool(rpc, poolAddress, token0, token1, amountIn = null, fee = null) {
   try {
+    const web3 = new Web3(rpc);
     const token0Contract = new web3.eth.Contract(ERC20_ABI, token0);
     const token1Contract = new web3.eth.Contract(ERC20_ABI, token1);
 
@@ -77,8 +72,8 @@ async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null, 
       token1Contract.methods.balanceOf(poolAddress).call()
     ]);
 
-    const decimalsToken0 = await getTokenDecimals(token0);
-    const decimalsToken1 = await getTokenDecimals(token1);
+    const decimalsToken0 = await getTokenDecimals(rpc, token0);
+    const decimalsToken1 = await getTokenDecimals(rpc, token1);
 
     const balance0 = new BigNumber(balance0Raw).div(new BigNumber(10).pow(decimalsToken0));
     const balance1 = new BigNumber(balance1Raw).div(new BigNumber(10).pow(decimalsToken1));
@@ -90,14 +85,7 @@ async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null, 
       priceAfterSwap = simulatePriceImpact(balance0, balance1, amountInBN, fee || 0.003);
     }
 
-    let blockNumber = null;
-    provider.getBlockNumber().then((result) => {
-      blockNumber = result;
-    });
-
-    const normalizedPrice = await getV3PriceNormalized(poolAddress, token0, token1);
-    const pricepriceFormatted = normalizedPrice;
-
+    const normalizedPrice = await getV3PriceNormalized(rpc, poolAddress, token0, token1);
     const priceImpact = calculatePriceImpact(rawPrice, priceAfterSwap);
 
     return {
@@ -105,8 +93,7 @@ async function getPriceFromV3Pool(poolAddress, token0, token1, amountIn = null, 
       tokenBalance1: balance1,
       currentPrice: rawPrice,
       NormalizedPrice: normalizedPrice,
-      PriceImpact: priceImpact,
-      BlockNumber: blockNumber
+      PriceImpact: priceImpact
     };
   } catch (err) {
     logger.error(`[ERROR]: Failed to fetch price from pool (${poolAddress}): ${err.message}`);
@@ -134,7 +121,8 @@ const DEFAULT_AMOUNT_IN = '1000000000000000000';
  * @param {string} token1 - Address of token1 in the pool.
  * @returns {Promise<object|null>} - Object with raw price.
  */
-async function getPriceFromV2Pool(poolAddress, token0, token1, amountIn = null, fee = null) {
+async function getPriceFromV2Pool(rpc, poolAddress, token0, token1, amountIn = null, fee = null) {
+  const web3 = new Web3(rpc);
   const poolContract = new web3.eth.Contract(UNISWAP_V2_POOL_ABI, poolAddress);
 
   const [poolToken0, poolToken1] = await Promise.all([
