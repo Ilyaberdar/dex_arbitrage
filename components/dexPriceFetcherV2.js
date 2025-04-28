@@ -29,7 +29,7 @@ class DexPriceFetcherV2 {
    * @param {string|bigint} [amountIn] - Amount of token0 to simulate a swap (optional)
    * @returns {Promise<object|null>} - Price data and pool state
    */
-  async fetchPrice(amountIn = null) {
+  async fetchV2PoolPrice(amountIn = null) {
     try {
       const poolContract = new this.web3.eth.Contract(UNISWAP_V2_POOL_ABI, this.poolAddress);
 
