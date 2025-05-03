@@ -1,0 +1,11 @@
+[package]
+name = "rust"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+ethers = { version = "2", default-features = false, features = ["ws", "rustls"] }
+dotenv = "0.15"
+rust_decimal = "1.37.1"
+anyhow = "1.0.98"

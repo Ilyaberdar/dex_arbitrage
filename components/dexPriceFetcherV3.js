@@ -9,6 +9,8 @@ const { logger } = require('../utils/log.js');
 const pkg = require('bignumber.js');
 const { BigNumber } = pkg;
 
+const { performance } = require('perf_hooks');
+
 /**
  * DexPriceFetcherV3
  * Fetches prices from Uniswap V3 style pools.
@@ -49,6 +51,8 @@ class DexPriceFetcherV3 {
       this.getTokenDecimals(this.token1)
     ]);
 
+    const start = performance.now();
+
     const sqrtPriceX96 = slot0.sqrtPriceX96;
     const priceX192 = sqrtPriceX96 * sqrtPriceX96;
 
@@ -58,6 +62,9 @@ class DexPriceFetcherV3 {
     if (price < 1e-6) {
       price = 1 / price;
     }
+
+    const end = performance.now();
+    logger.warn(`Execution time: ${(end - start).toFixed(2)} ms`);
 
     return price;
   }
@@ -80,13 +87,15 @@ class DexPriceFetcherV3 {
       const rawPrice = balance1.div(balance0).toFixed(18);
 
       let priceAfterSwap = null;
+      let priceImpact = null;
+
       if (amountIn) {
         const amountInBN = new BigNumber(amountIn);
-        priceAfterSwap = this.simulatePriceImpact(balance0, balance1, amountInBN, this.fee || 0.003);
+        priceAfterSwap = await this.simulatePriceImpact(balance0, balance1, amountInBN, this.fee || 0.003);
+        priceImpact = await this.calculatePriceImpact(rawPrice, priceAfterSwap);
       }
 
       const normalizedPrice = await this.getV3PriceSqrt();
-      const priceImpact = this.calculatePriceImpact(rawPrice, priceAfterSwap);
 
       return {
         tokenBalance0: balance0,
@@ -101,7 +110,7 @@ class DexPriceFetcherV3 {
     }
   }
 
-  simulatePriceImpact(balance0, balance1, amountInToken0, fee) {
+  async simulatePriceImpact(balance0, balance1, amountInToken0, fee) {
     const newBalance0 = balance0.plus(amountInToken0.times(1 - fee));
 
     // Constant product: x * y = k => new y = k / new x
@@ -112,7 +121,7 @@ class DexPriceFetcherV3 {
     return priceAfter;
   }
 
-  calculatePriceImpact(currentPrice, priceAfterSwap) {
+  async calculatePriceImpact(currentPrice, priceAfterSwap) {
     const impact = ((priceAfterSwap / currentPrice) - 1) * 100;
     return impact.toFixed(6);
   }
