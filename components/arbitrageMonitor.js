@@ -23,30 +23,38 @@ async function Tick() {
     const start = Date.now();
     try {
       const result = await main(false);
-      if (result?.IsArbitrageProfitable) {
+      if (result?.ArbitrageProfitable) {
         const arbitrageResult = {
-          SqrtPriceA: result.SqrtPriceA,
-          SqrtPriceB: result.SqrtPriceB,
-          PoolsSpread: result.PoolsSpread,
-          TotalPoolsFee: result.TotalPoolsFee,
-          CurrentGasPrice: result.CurrentGasPrice,
-          ArbitrageProfit: result.ArbitrageProfit
+          PriceBeforeSwapPoolB: result.PriceBeforeSwapPoolB,
+          PriceBeforeSwapPoolC: result.PriceBeforeSwapPoolC,
+          PriceAfterSwapPoolB: result.PriceAfterSwapPoolB,
+          PriceAfterSwapPoolC: result.PriceAfterSwapPoolC,
+          AverageSellPrice: result.AverageSellPrice,
+          AverageBuyPrice: result.AverageBuyPrice,
+          PriceDifference: result.PriceDifference,
+          FinalAmountProfit: result.FinalAmountProfit,
+          FinalPercentageProfit: result.FinalPercentageProfit,
+          Loan: result.Loan
         };
         const format = (num, digits = 4) => Number(num).toFixed(digits);
 
-        const message = `💥 *Arbitrage Opportunity Detected*
-        *• √Price A:* \`${format(arbitrageResult.SqrtPriceA)}\`
-        *• √Price B:* \`${format(arbitrageResult.SqrtPriceB)}\`
-        *• Spread:* \`${format(arbitrageResult.PoolsSpread)}\`
-        *• Total Fees:* \`${format(arbitrageResult.TotalPoolsFee)}\`
-        *• Gas Cost (USDC):* \`${format(arbitrageResult.CurrentGasPrice, 6)}\`
-        *• 📈 Profit (USDC):* \`${format(arbitrageResult.ArbitrageProfit, 2)}\`
-        🔁 *Executable:* ${arbitrageResult.ArbitrageProfit > 0 ? '*Yes ✅*' : '*No ❌*'}`;
+        const message = `*Arbitrage Opportunity Detected*
+        *• PriceBeforeSwapPoolB:* \`${format(arbitrageResult.PriceBeforeSwapPoolB)}\`
+        *• PriceBeforeSwapPoolC:* \`${format(arbitrageResult.PriceBeforeSwapPoolC)}\`
+        *• PriceAfterSwapPoolB:* \`${format(arbitrageResult.PriceAfterSwapPoolB)}\`
+        *• PriceAfterSwapPoolC:* \`${format(arbitrageResult.PriceAfterSwapPoolC)}\`
+        *• AverageSellPrice:* \`${format(arbitrageResult.AverageSellPrice, 6)}\`
+        *• AverageBuyPrice:* \`${format(arbitrageResult.AverageBuyPrice, 6)}\`
+        *• PriceDifference:* \`${format(arbitrageResult.PriceDifference, 6)}\`
+        *• FinalAmountProfit:* \`${format(arbitrageResult.FinalAmountProfit, 6)}\`
+        *• FinalPercentageProfit:* \`${format(arbitrageResult.FinalPercentageProfit, 6)}\`
+        *• Loan:* \`${format(arbitrageResult.Loan, 0)}\`
+        *Executable:* ${arbitrageResult.FinalPercentageProfit > 0 ? '*Yes ✅*' : '*No ❌*'}`;
         sendTelegramMessage(message);
       }
     } catch (err) {
       logger.error(`Error in arbitrage loop: ${err.message}`);
-      sendTelegramMessage(`*⚠️ Error in arbitrage loop:*\n\`${err.message}\``);
+      sendTelegramMessage(`*Error in arbitrage loop:*\n\`${err.message}\``);
     }
 
     const duration = Date.now() - start;

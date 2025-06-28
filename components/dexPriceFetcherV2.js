@@ -94,6 +94,40 @@ class DexPriceFetcherV2 {
       return null;
     }
   }
+
+    /**
+   * Simulates price after a swap using Uniswap constant product formula.
+   * @param {bigint} reserveIn - Current input reserve
+   * @param {bigint} reserveOut - Current output reserve
+   * @param {bigint} amountIn - Amount of tokenIn to simulate
+   * @param {number} fee - Swap fee (e.g., 0.003 for 0.3%)
+   * @returns {object} - New price, price impact, and amountOut
+   */
+    _simulatePriceAfterSwap(reserveIn, reserveOut, amountIn, fee = 0.003) {
+      const FEE_NUM = BigInt(Math.floor((1 - fee) * 1000));
+      const FEE_DEN = 1000n;
+  
+      const amountInWithFee = amountIn * FEE_NUM;
+      const numerator = amountInWithFee * reserveOut;
+      const denominator = reserveIn * FEE_DEN + amountInWithFee;
+  
+      const amountOut = numerator / denominator;
+  
+      const reserveInAfter = reserveIn + amountIn;
+      const reserveOutAfter = reserveOut - amountOut;
+  
+      const priceBefore = Number(reserveOut) / Number(reserveIn);
+      const priceAfter = Number(reserveOutAfter) / Number(reserveInAfter);
+      const priceImpact = (priceBefore - priceAfter) / priceBefore;
+  
+      return {
+        amountOut,
+        priceBefore,
+        priceAfter,
+        priceImpact
+      };
+    }
+  
 }
 
 module.exports = { DexPriceFetcherV2 };

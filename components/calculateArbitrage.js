@@ -12,7 +12,7 @@ const { BigNumber } = pkg;
 
 const FEE_UNISWAP = 0.0001;
 const FEE_SUSHISWAP = 0.0005;
-const LOAN = 10; //Pool Tokens. In this example 10 ETH
+const LOAN = 10; //Pool Tokens. In this example 1000 ETH
 
 const provider = new ethers.JsonRpcProvider(RPC.ARBITRUM);
 const pools = [
@@ -24,26 +24,56 @@ const pools = [
 async function main(bCheckPriceImpact) {
   try {
     results = [];
+
+    //TODO: Add algorithm for shufling and add labels for pools
     for (const pool of pools) {
       const prices = await pool.fetchV3PoolPrice();
       results.push(prices);
-
-      //printPoolState('Uniswap V3 pool', prices);
     }
 
-    const [poolA, poolB] = results;
-    const priceA = parseFloat(poolA.NormalizedPrice);
-    const priceB = parseFloat(poolB.NormalizedPrice);
+    const [poolB, poolC] = results;
 
     const gasPriceWei = await provider.send("eth_gasPrice", []);
     const gasPriceGwei = parseFloat(ethers.formatUnits(gasPriceWei, "gwei"));
-    const gasLimit = 250000;
-    const TokenPrice = poolA.NormalizedPrice;
-    const gasCostUSDC = (gasPriceGwei * gasLimit * TokenPrice) / 1e9;
+    const gasLimit = 250000; // move to config
+    //const gasCostUSDC = (gasPriceGwei * gasLimit * TokenPrice) / 1e9;
 
+    const priceA = parseFloat(poolB.NormalizedPrice);
+    const priceB = parseFloat(poolC.NormalizedPrice);
     const spread = Math.abs(priceA - priceB);
     const totalFees = (priceA * FEE_UNISWAP) + (priceB * FEE_SUSHISWAP);
 
+     if (spread > totalFees) {
+      const priceMovementB = await pools[0].simulateTradeLoop(LOAN, 0);
+      const priceMovementC = await pools[1].simulateTradeLoop(LOAN, 1);
+
+      const priceB = new BigNumber(priceMovementB.InitialPriceForFirstPool);
+      const priceC = new BigNumber(priceMovementC.AverageBuyPriceForSecondPool);
+      const priceDifference = priceB.minus(priceC);
+
+      const totalOutUSDC = new BigNumber(priceMovementB.TotalGiveStableCoinsFromSellToken);
+      const totalInUSDC = new BigNumber(priceMovementC.TotalPayStableCoinsForBuyToken);
+      const amountDifference = totalOutUSDC.minus(totalInUSDC);
+
+      const profitPercent = amountDifference.div(LOAN * priceMovementB.InitialPriceForFirstPool).times(100);
+      const isArbitrageProfitable = profitPercent.gt(0);
+
+      return {
+        PriceBeforeSwapPoolB: priceB.toFixed(6),
+        PriceBeforeSwapPoolC: priceC.toFixed(6),
+        PriceAfterSwapPoolB: priceMovementB.FinalPriceForFirstPool,
+        PriceAfterSwapPoolC: priceMovementC.FinalPriceForSecondPool,
+        AverageSellPrice: priceMovementB.AverageSellPriceForFirstPool,
+        AverageBuyPrice: priceMovementC.AverageBuyPriceForSecondPool,
+        PriceDifference: priceDifference.toFixed(6),
+        FinalAmountProfit: amountDifference.toFixed(6),
+        FinalPercentageProfit: profitPercent.toFixed(2),
+        Loan: LOAN,
+        ArbitrageProfitable: isArbitrageProfitable
+      }
+     }
+
+    /*
     if (spread > totalFees) {
       if (bCheckPriceImpact) {
         const amountInBNA = new BigNumber(LOAN);
@@ -79,20 +109,12 @@ async function main(bCheckPriceImpact) {
       const dxBack = dxBackNumerator.div(dxBackDenominator);
 
       const ethDelta = dxBack.minus(A);
+      const profitPercent = ethDelta.div(LOAN).times(100);
       const profitUSDC = ethDelta.times(priceB).minus(G);
 
       const isArbitrageProfitable = profitUSDC.gt(0);
-
-      return {
-        SqrtPriceA: priceA,
-        SqrtPriceB: priceB,
-        PoolsSpread: spread,
-        TotalPoolsFee: totalFees,
-        CurrentGasPrice: gasCostUSDC,
-        ArbitrageProfit: profitUSDC,
-        IsArbitrageProfitable: isArbitrageProfitable
-      };
-    }
+      }
+    */
   } catch (err) {
     logger.error(`[ArbitrageMonitor]: Failed to fetch price from pool (${this.poolAddress}): ${err.message}`);
     return null;

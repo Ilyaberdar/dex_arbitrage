@@ -15,6 +15,15 @@ const UNISWAP_V3_POOL_ABI = [
     ]
   },
   {
+    "name": "liquidity",
+    "type": "function",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      { "name": "", "type": "uint128" }
+    ]
+  },
+  {
     "name": "token0",
     "type": "function",
     "stateMutability": "view",

@@ -1,36 +1,41 @@
-require('dotenv').config()
-
+require('dotenv').config();
 const { ethers } = require('ethers');
+const { RPC } = require('../config/rpcNetworks.js');
 
+const provider = new ethers.JsonRpcProvider(RPC.ETHEREUM);
 
-console.log(process.env.RPC_URL);
-
-// Параметри
-const provider = new ethers.JsonRpcProvider(process.env.RPC_URL); // або свій RPC
-const quoterAddress = '0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6'; // Офіційний Quoter Uniswap V3 на Ethereum
-
-const tokenIn = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'; // USDC адреса
-const tokenOut = '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2'; // WETH адреса
-const fee = 3000; // 0.3% фі
-const amountIn = ethers.parseUnits('2000', 6); // 2000 USDC (6 decimal places)
-
-const quoterABI = [
-  'function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)'
+const quoterAddress = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
+const quoterAbi = [
+  "function quoteExactInputSingle(address,address,uint24,uint256,uint160) returns (uint256,uint160,uint32,uint256)"
 ];
+const iface = new ethers.Interface(quoterAbi);
 
-async function getQuote() {
-  const quoter = new ethers.Contract(quoterAddress, quoterABI, provider);
-  //const quoter = new web3.eth.Contract(quoterABI, quoterAddress);
-  
-  const amountOut = await quoter.quoteExactInputSingle(
-    tokenIn,
-    tokenOut,
+// ✅ Проверенные параметры
+const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+const fee = 500; // 0.05% — valid for UniswapV3 USDC/WETH
+const amountIn = ethers.parseUnits("1000", 6); // 1000 USDC
+
+async function simulateQuote() {
+  const data = iface.encodeFunctionData("quoteExactInputSingle", [
+    USDC,
+    WETH,
     fee,
     amountIn,
-    0 // sqrtPriceLimitX96 = 0 -> без обмеження
-  );
+    0
+  ]);
 
-  console.log('Скільки ETH отримаєш за 2000 USDC:', ethers.formatEther(amountOut));
+  try {
+    const res = await provider.call({ to: quoterAddress, data });
+    const [amountOut, sqrtPriceX96, ticksCrossed, gasEstimate] = iface.decodeFunctionResult("quoteExactInputSingle", res);
+
+    console.log("ETH Out:", ethers.formatUnits(amountOut, 18));
+    console.log("sqrtPriceX96 After:", sqrtPriceX96.toString());
+    console.log("Ticks Crossed:", ticksCrossed.toString());
+    console.log("Gas Estimate:", gasEstimate.toString());
+  } catch (e) {
+    console.error("Ошибка:", e.message);
+  }
 }
 
-getQuote();
+simulateQuote();
