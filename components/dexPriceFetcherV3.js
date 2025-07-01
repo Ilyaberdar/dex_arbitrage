@@ -52,35 +52,41 @@ class DexPriceFetcherV3 {
  * @returns {Promise<number>} Normalized pool price (token1 per token0), adjusted for decimals
  */
   async getV3PriceSqrt(bShowDebug = false) {
-    const pool = new ethers.Contract(this.poolAddress, UNISWAP_V3_POOL_ABI, this.provider);
+    try {
+      const pool = new ethers.Contract(this.poolAddress, UNISWAP_V3_POOL_ABI, this.provider);
 
-    const [slot0, decimals0, decimals1] = await Promise.all([
-      pool.slot0(),
-      this.getTokenDecimals(this.token0),
-      this.getTokenDecimals(this.token1)
-    ]);
+      const [slot0, decimals0, decimals1] = await Promise.all([
+        pool.slot0(),
+        this.getTokenDecimals(this.token0),
+        this.getTokenDecimals(this.token1)
+      ]);
 
-    var start = null;
-    if (bShowDebug) {
-      start = performance.now();
+      var start = null;
+      if (bShowDebug) {
+        start = performance.now();
+      }
+
+      const sqrtPriceX96 = slot0.sqrtPriceX96;
+      const priceX192 = sqrtPriceX96 * sqrtPriceX96;
+
+      let price = Number(priceX192) / Number(2n ** 192n);
+      price = price * (10 ** (decimals0 - decimals1))
+
+      if (price < 1e-6) {
+        price = 1 / price;
+      }
+
+      if (bShowDebug) {
+        const end = performance.now();
+        logger.info(`Execution time: ${(end - start).toFixed(2)} ms`);
+      }
+
+      return price;
+
+    } catch (err) {
+      logger.error(`[getV3PriceSqrt]: Failed to fetch price from pool (${this.poolAddress}): ${err.message}`);
+      return null;
     }
-
-    const sqrtPriceX96 = slot0.sqrtPriceX96;
-    const priceX192 = sqrtPriceX96 * sqrtPriceX96;
-
-    let price = Number(priceX192) / Number(2n ** 192n);
-    price = price * (10 ** (decimals0 - decimals1))
-
-    if (price < 1e-6) {
-      price = 1 / price;
-    }
-
-    if (bShowDebug) {
-      const end = performance.now();
-      logger.info(`Execution time: ${(end - start).toFixed(2)} ms`);
-    }
-
-    return price;
   }
 
   async fetchV3PoolPrice(amountIn = null, bShowDebug = false) {
@@ -135,7 +141,7 @@ class DexPriceFetcherV3 {
     return priceAfter;
   }
 
-  async simulateTradeLoop(TokenLoan, poolLabel) {
+  async simulateTradeLoop(TokenLoan, poolLabel, bShowDebug = false) {
     try {
       const state = await this.getPoolState();
 
@@ -167,7 +173,7 @@ class DexPriceFetcherV3 {
        */
 
       if (poolLabel === 0) {
-        const simulateSwapPoolB = await this.simulateCurvePriceMovement(sqrtPriceX96, liquidity, TokenLoan, decimals0, decimals1, false, true);
+        const simulateSwapPoolB = await this.simulateCurvePriceMovement(sqrtPriceX96, liquidity, TokenLoan, decimals0, decimals1, false, bShowDebug);
         const poolBInitialPrice = simulateSwapPoolB.initialPrice;
         const poolBFinalPrice = simulateSwapPoolB.priceAfter;
         const poolBAverageSelEthPrice = simulateSwapPoolB.averageSellCurvePrice;
@@ -182,7 +188,7 @@ class DexPriceFetcherV3 {
           PriceImpactA: priceImpactPoolB.toString(),
         };
       } if (poolLabel === 1) {
-        const simulateSwapPoolC = await this.simulateCurvePriceMovement(sqrtPriceX96, liquidity, TokenLoan, decimals0, decimals1, true, true);
+        const simulateSwapPoolC = await this.simulateCurvePriceMovement(sqrtPriceX96, liquidity, TokenLoan, decimals0, decimals1, true, bShowDebug);
         const poolCInitialPrice = simulateSwapPoolC.initialPrice;
         const poolCFinalPrice = simulateSwapPoolC.priceAfter;
         const poolCAverageBuyEthPrice = simulateSwapPoolC.averageSellCurvePrice;
@@ -276,9 +282,9 @@ class DexPriceFetcherV3 {
       dy = L.times(sqrtP1.minus(sqrtP0)).div(Q96);
     }
 
-    const avgExecutionPrice = dy.div(amountInDecimal);
-    const avgPriceInUSDC = avgExecutionPrice.div(new BigNumber(10).pow(decimals1));
-    var USDCAmountToTrade = avgPriceInUSDC * amountInDecimal;
+    const dyUSDCDecimal = dy.div(new BigNumber(10).pow(decimals1)); // normalize dy
+    const avgPriceInUSDC = dyUSDCDecimal.div(amountInDecimal);      // USDC / ETH
+    var USDCAmountToTrade = avgPriceInUSDC.times(amountInDecimal); // BigNumber
 
     if (bRevert) {
       USDCAmountToTrade *= feeMultiplier;

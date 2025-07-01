@@ -22,7 +22,7 @@ async function Tick() {
   while (true) {
     const start = Date.now();
     try {
-      const result = await main(false);
+      const result = await main();
       if (result?.ArbitrageProfitable) {
         const arbitrageResult = {
           PriceBeforeSwapPoolB: result.PriceBeforeSwapPoolB,
@@ -39,16 +39,16 @@ async function Tick() {
         const format = (num, digits = 4) => Number(num).toFixed(digits);
 
         const message = `*Arbitrage Opportunity Detected*
-        *• PriceBeforeSwapPoolB:* \`${format(arbitrageResult.PriceBeforeSwapPoolB)}\`
-        *• PriceBeforeSwapPoolC:* \`${format(arbitrageResult.PriceBeforeSwapPoolC)}\`
-        *• PriceAfterSwapPoolB:* \`${format(arbitrageResult.PriceAfterSwapPoolB)}\`
-        *• PriceAfterSwapPoolC:* \`${format(arbitrageResult.PriceAfterSwapPoolC)}\`
-        *• AverageSellPrice:* \`${format(arbitrageResult.AverageSellPrice, 6)}\`
-        *• AverageBuyPrice:* \`${format(arbitrageResult.AverageBuyPrice, 6)}\`
-        *• PriceDifference:* \`${format(arbitrageResult.PriceDifference, 6)}\`
-        *• FinalAmountProfit:* \`${format(arbitrageResult.FinalAmountProfit, 6)}\`
-        *• FinalPercentageProfit:* \`${format(arbitrageResult.FinalPercentageProfit, 6)}\`
-        *• Loan:* \`${format(arbitrageResult.Loan, 0)}\`
+        *PriceBeforeSwapPoolB:* \`${format(arbitrageResult.PriceBeforeSwapPoolB)}\`
+        *PriceAfterSwapPoolB:* \`${format(arbitrageResult.PriceAfterSwapPoolB)}\`
+        *AverageSellPriceInPoolB:* \`${format(arbitrageResult.AverageSellPrice, 6)}\`
+        *PriceBeforeSwapPoolC:* \`${format(arbitrageResult.PriceBeforeSwapPoolC)}\`
+        *PriceAfterSwapPoolC:* \`${format(arbitrageResult.PriceAfterSwapPoolC)}\`
+        *AverageBuyPriceInPoolC:* \`${format(arbitrageResult.AverageBuyPrice, 6)}\`
+        *PriceDifference:* \`${format(arbitrageResult.PriceDifference, 6)}\`
+        *FinalAmountProfit:* \`${format(arbitrageResult.FinalAmountProfit, 6)}\`
+        *FinalPercentageProfit:* \`${format(arbitrageResult.FinalPercentageProfit, 6)}\`
+        *LoanETH:* \`${format(arbitrageResult.Loan, 0)}\`
         *Executable:* ${arbitrageResult.FinalPercentageProfit > 0 ? '*Yes ✅*' : '*No ❌*'}`;
         sendTelegramMessage(message);
       }
