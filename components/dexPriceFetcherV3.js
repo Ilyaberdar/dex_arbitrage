@@ -1,4 +1,5 @@
 const { Web3 } = require('web3');
+const { DexPriceFetcherBase } = require('./dexPriceFetcherBase.js');
 const { ethers } = require('ethers');
 
 const { ERC20_ABI } = require('../config/erc20ABI.js');
@@ -18,14 +19,13 @@ const { TickListDataProvider } = require('@uniswap/v3-sdk');
 const { Contract } = require('ethers');
 const IUniswapV3PoolABI = require('@uniswap/v3-core/artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json');
 
-
-
 /**
  * DexPriceFetcherV3
  * Fetches prices from Uniswap V3 style pools.
  */
-class DexPriceFetcherV3 {
+class DexPriceFetcherV3 extends DexPriceFetcherBase {
   constructor(rpcUrl, poolAddress, token0, token1, fee) {
+    super(),
     this.rpcUrl = rpcUrl;
     this.poolAddress = poolAddress;
     this.token0 = token0;
@@ -33,60 +33,6 @@ class DexPriceFetcherV3 {
     this.fee = fee || 0.003;
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
     this.web3 = new Web3(rpcUrl);
-  }
-
-  /**
- * Fetches the normalized price from a Uniswap V3 pool.
- *
- * Calculation explanation:
- * - `slot0().sqrtPriceX96` gives the square root of the price (token1/token0), scaled by 2^96 (Q96 fixed-point format).
- * - To obtain the real price, we square `sqrtPriceX96` and divide by 2^192.
- * - Then, the price is adjusted based on the decimal differences between token0 and token1.
- * - If the calculated price is extremely small (< 1e-6), it is inverted to maintain consistency.
- *
- * Final formula:
- *   price = (sqrtPriceX96^2) / 2^192
- *   price = price * (10^(decimals0 - decimals1))
- *   if (price < 1e-6) { price = 1 / price }
- *
- * @returns {Promise<number>} Normalized pool price (token1 per token0), adjusted for decimals
- */
-  async getV3PriceSqrt(bShowDebug = false) {
-    try {
-      const pool = new ethers.Contract(this.poolAddress, UNISWAP_V3_POOL_ABI, this.provider);
-
-      const [slot0, decimals0, decimals1] = await Promise.all([
-        pool.slot0(),
-        this.getTokenDecimals(this.token0),
-        this.getTokenDecimals(this.token1)
-      ]);
-
-      var start = null;
-      if (bShowDebug) {
-        start = performance.now();
-      }
-
-      const sqrtPriceX96 = slot0.sqrtPriceX96;
-      const priceX192 = sqrtPriceX96 * sqrtPriceX96;
-
-      let price = Number(priceX192) / Number(2n ** 192n);
-      price = price * (10 ** (decimals0 - decimals1))
-
-      if (price < 1e-6) {
-        price = 1 / price;
-      }
-
-      if (bShowDebug) {
-        const end = performance.now();
-        logger.info(`Execution time: ${(end - start).toFixed(2)} ms`);
-      }
-
-      return price;
-
-    } catch (err) {
-      logger.error(`[getV3PriceSqrt]: Failed to fetch price from pool (${this.poolAddress}): ${err.message}`);
-      return null;
-    }
   }
 
   async fetchV3PoolPrice(amountIn = null, bShowDebug = false) {
@@ -99,8 +45,8 @@ class DexPriceFetcherV3 {
         token1Contract.methods.balanceOf(this.poolAddress).call()
       ]);
 
-      const decimalsToken0 = await this.getTokenDecimals(this.token0);
-      const decimalsToken1 = await this.getTokenDecimals(this.token1);
+      const decimalsToken0 = await super.getTokenDecimals(this.token0, this.web3);
+      const decimalsToken1 = await super.getTokenDecimals(this.token1, this.web3);
 
       const balance0 = new BigNumber(balance0Raw).div(new BigNumber(10).pow(decimalsToken0));
       const balance1 = new BigNumber(balance1Raw).div(new BigNumber(10).pow(decimalsToken1));
@@ -115,7 +61,7 @@ class DexPriceFetcherV3 {
         priceImpact = await this.calculatePriceImpact(rawPrice, priceAfterSwap);
       }
 
-      const normalizedPrice = await this.getV3PriceSqrt(bShowDebug);
+      const normalizedPrice = await super.getPriceSqrt(this.poolAddress, this.provider, this.web3, this.token0, this.token1, bShowDebug);
 
       return {
         tokenBalance0: balance0,
@@ -145,8 +91,8 @@ class DexPriceFetcherV3 {
     try {
       const state = await this.getPoolState();
 
-      const decimals0 = await this.getTokenDecimals(this.token0);
-      const decimals1 = await this.getTokenDecimals(this.token1);
+      const decimals0 = await super.getTokenDecimals(this.token0, this.web3);
+      const decimals1 = await super.getTokenDecimals(this.token1, this.web3);
 
       const sqrtPriceX96 = JSBI.BigInt(state.sqrtPriceX96.toString());
       const liquidity = JSBI.BigInt(state.liquidity.toString());
@@ -292,7 +238,8 @@ class DexPriceFetcherV3 {
 
     if (bShowDebug) {
       const label = !bRevert ? "PoolB" : "PoolC";
-      logger.warn("Show debug for " + label);
+      logger.warn("*******V3*******");
+      logger.info("Show debug for " + label);
       logger.info("PriceBeforeSwap: " + initialPrice.toFixed(2));
       logger.info("PriceAfterSwap: " + finalPrice.toFixed(2));
       logger.info("AverageCurveSellPrice: " + avgPriceInUSDC.toFixed(2));
@@ -310,17 +257,6 @@ class DexPriceFetcherV3 {
   async calculatePriceImpact(currentPrice, priceAfterSwap) {
     const impact = Math.abs(((priceAfterSwap / currentPrice) - 1) * 100);
     return impact.toFixed(6);
-  }
-
-  async getTokenDecimals(tokenAddress) {
-    try {
-      const token = new this.web3.eth.Contract(ERC20_ABI, tokenAddress);
-      const decimals = await token.methods.decimals().call();
-      return parseInt(decimals);
-    } catch (err) {
-      logger.error(`[DexPriceFetcherV3]: Failed to fetch decimals for token ${tokenAddress}: ${err.message}`);
-      return 18; // fallback default
-    }
   }
 
   async getPoolState() {

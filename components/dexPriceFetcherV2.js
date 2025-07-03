@@ -1,20 +1,17 @@
 const { Web3 } = require('web3');
+const { DexPriceFetcherBase } = require('./dexPriceFetcherBase.js');
 const { ethers } = require('ethers');
 const { UNISWAP_V2_POOL_ABI } = require('../config/uniswapV2PoolABI.js');
 const { ERC20_ABI } = require('../config/erc20ABI.js');
-const { getTokenDecimals } = require('../utils/tokenUtils.js');
 const { logger } = require('../utils/log.js');
-
-const UNISWAP_V2_FEE_NUMERATOR = 997n;
-const UNISWAP_V2_FEE_DENOMINATOR = 1000n;
-const DEFAULT_AMOUNT_IN = '1000000000000000000';
 
 /**
  * DexPriceFetcherV2
  * Fetches prices from Uniswap V2 style pools.
  */
-class DexPriceFetcherV2 {
-  constructor({ rpcUrl, poolAddress, token0, token1, fee }) {
+class DexPriceFetcherV2 extends DexPriceFetcherBase {
+  constructor(rpcUrl, poolAddress, token0, token1, fee) {
+    super(),
     this.rpcUrl = rpcUrl;
     this.poolAddress = poolAddress;
     this.token0 = token0;
@@ -29,7 +26,7 @@ class DexPriceFetcherV2 {
    * @param {string|bigint} [amountIn] - Amount of token0 to simulate a swap (optional)
    * @returns {Promise<object|null>} - Price data and pool state
    */
-  async fetchV2PoolPrice(amountIn = null) {
+  async fetchV2PoolPrice() {
     try {
       const poolContract = new this.web3.eth.Contract(UNISWAP_V2_POOL_ABI, this.poolAddress);
 
@@ -46,8 +43,8 @@ class DexPriceFetcherV2 {
 
       // Fetch token decimals
       const [decimals0, decimals1] = await Promise.all([
-        getTokenDecimals(this.rpcUrl, poolToken0),
-        getTokenDecimals(this.rpcUrl, poolToken1)
+        this.getTokenDecimals(poolToken0),
+        this.getTokenDecimals(poolToken1)
       ]);
 
       let reserveIn, reserveOut;
@@ -63,30 +60,19 @@ class DexPriceFetcherV2 {
         throw new Error('Provided tokens do not match the pool tokens.');
       }
 
-      // Default input amount if not provided
-      const inputAmount = amountIn ? BigInt(amountIn) : BigInt(DEFAULT_AMOUNT_IN);
-
-      // Calculate swap output amount accounting for Uniswap V2 fee
-      const amountInWithFee = inputAmount * UNISWAP_V2_FEE_NUMERATOR;
-      const numerator = amountInWithFee * reserveOut;
-      const denominator = reserveIn * UNISWAP_V2_FEE_DENOMINATOR + amountInWithFee;
-      const amountOut = numerator / denominator;
-
       const normalizedReserve0 = Number(reserve0) / (10 ** decimals0);
       const normalizedReserve1 = Number(reserve1) / (10 ** decimals1);
 
       const realPrice = normalizedReserve0 / normalizedReserve1;
-      const priceFormatted = Number(amountOut) / Number(inputAmount);
-      const expectedPrice = Number(reserveOut) / Number(reserveIn);
-      const priceImpact = expectedPrice > 0 ? (expectedPrice - priceFormatted) / expectedPrice : 0;
       const blockNumber = await this.web3.eth.getBlockNumber();
 
       return {
-        tokenBalance0: normalizedReserve0,
-        tokenBalance1: normalizedReserve1,
-        currentPrice: realPrice,
-        NormalizedPrice: priceFormatted,
-        PriceImpact: priceImpact
+        TokenBalance0: normalizedReserve0,
+        TokenBalance1: normalizedReserve1,
+        CurrentPrice: realPrice,
+        CurrentBlock: blockNumber,
+        TokenDecimals0: decimals0,
+        TokenDecimals1: decimals1,
       };
 
     } catch (error) {
@@ -95,39 +81,90 @@ class DexPriceFetcherV2 {
     }
   }
 
-    /**
-   * Simulates price after a swap using Uniswap constant product formula.
-   * @param {bigint} reserveIn - Current input reserve
-   * @param {bigint} reserveOut - Current output reserve
-   * @param {bigint} amountIn - Amount of tokenIn to simulate
-   * @param {number} fee - Swap fee (e.g., 0.003 for 0.3%)
-   * @returns {object} - New price, price impact, and amountOut
-   */
-    _simulatePriceAfterSwap(reserveIn, reserveOut, amountIn, fee = 0.003) {
-      const FEE_NUM = BigInt(Math.floor((1 - fee) * 1000));
-      const FEE_DEN = 1000n;
-  
-      const amountInWithFee = amountIn * FEE_NUM;
-      const numerator = amountInWithFee * reserveOut;
-      const denominator = reserveIn * FEE_DEN + amountInWithFee;
-  
-      const amountOut = numerator / denominator;
-  
-      const reserveInAfter = reserveIn + amountIn;
-      const reserveOutAfter = reserveOut - amountOut;
-  
-      const priceBefore = Number(reserveOut) / Number(reserveIn);
-      const priceAfter = Number(reserveOutAfter) / Number(reserveInAfter);
-      const priceImpact = (priceBefore - priceAfter) / priceBefore;
-  
-      return {
-        amountOut,
-        priceBefore,
-        priceAfter,
-        priceImpact
-      };
+  /**
+ * Simulates price after a swap using Uniswap constant product formula.
+ * @param {bigint} reserveIn - Current input reserve
+ * @param {bigint} reserveOut - Current output reserve
+ * @param {bigint} amountIn - Amount of tokenIn to simulate
+ * @param {number} fee - Swap fee (e.g., 0.003 for 0.3%)
+ * @returns {object} - New price, price impact, and amountOut
+ */
+  simulatePriceAfterSwap(reserveIn, reserveOut, amountDecimal, tokenInDecimals, tokenOutDecimals, bRevert = false, bShowDebug = false) {
+    const FEE_NUM = BigInt(Math.floor((1 - this.fee) * 1000));
+    const FEE_DEN = 1000n;
+
+    const multiplier = 10n ** BigInt(tokenInDecimals);
+    const amountIn = BigInt(Math.floor(amountDecimal * Number(multiplier)));
+
+    const amountInWithFee = amountIn * FEE_NUM;
+    const numerator = amountInWithFee * reserveOut;
+    const denominator = reserveIn * FEE_DEN + amountInWithFee;
+
+    const amountOut = numerator / denominator;
+
+    const reserveInAfter = reserveIn + amountIn;
+    const reserveOutAfter = reserveOut - amountOut;
+
+    // Normalize to decimals
+    const normalizedReserveIn = Number(reserveIn) / (10 ** tokenInDecimals);
+    const normalizedReserveOut = Number(reserveOut) / (10 ** tokenOutDecimals);
+    const normalizedReserveInAfter = Number(reserveInAfter) / (10 ** tokenInDecimals);
+    const normalizedReserveOutAfter = Number(reserveOutAfter) / (10 ** tokenOutDecimals);
+
+    // Compute price before and after
+    let priceBefore = normalizedReserveOut / normalizedReserveIn;
+    let priceAfter = normalizedReserveOutAfter / normalizedReserveInAfter;
+
+    if (tokenOutDecimals === 18 && tokenInDecimals === 6) {
+      priceBefore = 1 / priceBefore;
+      priceAfter = 1 / priceAfter;
     }
-  
+      
+    const AveragePrice = (priceBefore + priceAfter) / 2;
+    const priceImpact = this.calculatePriceImpact(priceBefore, priceAfter);
+
+    if (bShowDebug) {
+      const label = !bRevert ? "PoolB" : "PoolC";
+      logger.warn("*******V2*******");
+      logger.info("Show debug for " + label);
+      logger.info("AmountOut: " + amountOut.toString());
+      logger.info("ReserveOutAfter: " + reserveOutAfter.toString());
+      logger.info("PriceBefore: " + priceBefore);
+      logger.info("PriceAfter: " + priceAfter);
+      logger.info("AverageSellPrice : " + AveragePrice);
+      logger.info("PriceImpact: " + priceImpact);
+    }
+
+    return {
+      priceBefore,
+      priceAfter,
+      AveragePrice,
+      priceImpact
+    };
+  }
+
+  async getCurrentEthPrice(poolAddress) {
+    const currentPrice = await super.getPriceSqrt(poolAddress, this.provider, this.web3, this.token0, this.token1);
+    return {
+      CurrentPrice: currentPrice
+    }
+  }
+
+  calculatePriceImpact(currentPrice, priceAfterSwap) {
+    const impact = Math.abs(((priceAfterSwap / currentPrice) - 1) * 100);
+    return impact.toFixed(6);
+  }
+
+  async getTokenDecimals(tokenAddress) {
+    try {
+      const token = new this.web3.eth.Contract(ERC20_ABI, tokenAddress);
+      const decimals = await token.methods.decimals().call();
+      return parseInt(decimals);
+    } catch (err) {
+      logger.error(`[DexPriceFetcherV2]: Failed to fetch decimals for token ${tokenAddress}: ${err.message}`);
+      return 18; // fallback default
+    }
+  }
 }
 
 module.exports = { DexPriceFetcherV2 };
