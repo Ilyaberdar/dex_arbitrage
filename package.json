@@ -17,6 +17,7 @@
     "console.table": "^0.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
+    "eth-price": "^0.1.5",
     "ethers": "^6.13.7",
     "express": "^5.1.0",
     "http": "^0.0.1-security",
