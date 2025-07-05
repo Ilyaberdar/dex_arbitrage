@@ -1,4 +1,4 @@
-use eframe::egui::{self, CentralPanel, ProgressBar};
+use eframe::egui::{self, CentralPanel, ProgressBar, Color32};
 use eframe::{App, Frame};
 use serde::Deserialize;
 use std::fs;
@@ -25,8 +25,32 @@ impl App for PerfApp {
                     metric.label, metric.avg_ms, metric.last_ms
                 ));
 
-                ui.add(ProgressBar::new((metric.avg_ms / 1000.0).min(1.0) as f32).text("avg"));
-                ui.add(ProgressBar::new((metric.last_ms / 1000.0).min(1.0) as f32).text("last"));
+                let avg_color = if metric.avg_ms > 1000.0 {
+                    Color32::RED
+                } else if metric.avg_ms > 500.0 {
+                    Color32::YELLOW
+                } else {
+                    Color32::from_rgb(100, 200, 255)
+                };
+
+                let last_color = if metric.last_ms > 1000.0 {
+                    Color32::RED
+                } else if metric.last_ms > 500.0 {
+                    Color32::YELLOW
+                } else {
+                    Color32::from_rgb(100, 200, 255)
+                };
+
+                ui.add(
+                    ProgressBar::new((metric.avg_ms / 3000.0).min(1.0) as f32)
+                        .text("avg")
+                        .fill(avg_color),
+                );
+                ui.add(
+                    ProgressBar::new((metric.last_ms / 3000.0).min(1.0) as f32)
+                        .text("last")
+                        .fill(last_color),
+                );
                 ui.separator();
             }
         });
