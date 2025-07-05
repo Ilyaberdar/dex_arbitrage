@@ -1,7 +1,7 @@
 // arbitrageMinitor.js
-const { mainV2, mainV3 } = require('./calculateArbitrage.js');
-const axios = require('axios');
-const { logger } = require('../utils/log.js');
+import { mainV2, mainV3 } from './calculateArbitrage.js';
+import axios from 'axios';
+import { logger } from '../utils/log.js';
 
 const TELEGRAM_BOT_TOKEN = '7665763072:AAFXuQ7jXGl88DqZi0l412lthEFm7xluxM4';
 const TELEGRAM_CHAT_ID = '-1002591098131';
@@ -100,7 +100,7 @@ async function Tick() {
       }
     } catch (err) {
       logger.error(`Error in arbitrage loop: ${err.message}`);
-      sendTelegramMessage(`*Error in arbitrage loop:*\n\`${err.message}\``);
+      //sendTelegramMessage(`*Error in arbitrage loop:*\n\`${err.message}\``);
     }
 
     const duration = Date.now() - start;

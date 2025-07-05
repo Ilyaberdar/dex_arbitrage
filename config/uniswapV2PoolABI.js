@@ -48,5 +48,5 @@ const UNISWAP_V2_POOL_ABI = [
     }
   ];
   
-  module.exports = { UNISWAP_V2_POOL_ABI };
+export { UNISWAP_V2_POOL_ABI };
   

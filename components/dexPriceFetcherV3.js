@@ -1,23 +1,35 @@
-const { Web3 } = require('web3');
-const { DexPriceFetcherBase } = require('./dexPriceFetcherBase.js');
-const { ethers } = require('ethers');
+import Web3 from 'web3';
+import { DexPriceFetcherBase } from './dexPriceFetcherBase.js';
+import { ethers } from 'ethers';
 
-const { ERC20_ABI } = require('../config/erc20ABI.js');
-const { UNISWAP_V3_POOL_ABI } = require('../config/uniswapV3PoolABI.js');
-const { Pool, Trade, Route, SwapQuoter, SwapRouter, TickMath, TickDataProvider } = require('@uniswap/v3-sdk');
-const { Token, CurrencyAmount, TradeType } = require('@uniswap/sdk-core');
-const JSBI = require('jsbi');
+import { ERC20_ABI } from '../config/erc20ABI.js';
+import { UNISWAP_V3_POOL_ABI } from '../config/uniswapV3PoolABI.js';
 
-const pkg = require('bignumber.js');
-const { BigNumber } = pkg;
-const BN = require('bignumber.js');
+import {
+  Pool,
+  Trade,
+  Route,
+  SwapQuoter,
+  SwapRouter,
+  TickMath,
+} from '@uniswap/v3-sdk';
 
-const { logger } = require('../utils/log.js');
-const { performance } = require('perf_hooks');
+import {
+  Token,
+  CurrencyAmount,
+  TradeType
+} from '@uniswap/sdk-core';
 
-const { TickListDataProvider } = require('@uniswap/v3-sdk');
-const { Contract } = require('ethers');
-const IUniswapV3PoolABI = require('@uniswap/v3-core/artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json');
+import JSBI from 'jsbi';
+import BigNumberPkg from 'bignumber.js';
+const { BigNumber } = BigNumberPkg;
+const BN = BigNumberPkg;
+
+import { logger } from '../utils/log.js';
+import { performance } from 'perf_hooks';
+
+import IUniswapV3PoolABI from '@uniswap/v3-core/artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json' assert { type: 'json' };
+
 
 /**
  * DexPriceFetcherV3
@@ -282,5 +294,5 @@ class DexPriceFetcherV3 extends DexPriceFetcherBase {
   }
 }
 
-module.exports = { DexPriceFetcherV3 };
+export { DexPriceFetcherV3 };
 

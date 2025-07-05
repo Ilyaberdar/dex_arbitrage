@@ -21,4 +21,4 @@ const ARB_NETWORK_POOL = {
   };
 // ~ARB Pools End
 
-module.exports = { ETH_NETWORK_POOL, ARB_NETWORK_POOL };
+export { ETH_NETWORK_POOL, ARB_NETWORK_POOL };

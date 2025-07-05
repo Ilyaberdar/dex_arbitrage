@@ -4,3 +4,4 @@ export const ROUTERS = {
     ShibaSwap: '0x03f7724180AA6b939894B5Ca4314783B0b36b329'
   };
   
+export { ROUTERS }

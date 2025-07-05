@@ -13,4 +13,4 @@ const TOKEN_ARB = {
   USDC: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
 };
 
-module.exports = { TOKEN_ETH, TOKEN_ARB };
+export { TOKEN_ETH, TOKEN_ARB };

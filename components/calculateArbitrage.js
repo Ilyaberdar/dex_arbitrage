@@ -1,15 +1,16 @@
-const { DexPriceFetcherV3 } = require('./dexPriceFetcherV3.js');
-const { DexPriceFetcherV2 } = require('./dexPriceFetcherV2.js');
+import { DexPriceFetcherV3 } from './dexPriceFetcherV3.js';
+import  { DexPriceFetcherV2 } from './dexPriceFetcherV2.js';
 
-const { TOKEN_ETH, TOKEN_ARB } = require('../config/tokens.js');
-const { ETH_NETWORK_POOL, ARB_NETWORK_POOL } = require('../config/liquidityPool.js');
+import { TOKEN_ETH, TOKEN_ARB } from '../config/tokens.js';
+import { ETH_NETWORK_POOL, ARB_NETWORK_POOL } from '../config/liquidityPool.js';
 
-const { RPC } = require('../config/rpcNetworks.js');
-const { ethers } = require("ethers");
-const { logger } = require('../utils/log.js');
+import { RPC } from '../config/rpcNetworks.js';
+import { ethers } from "ethers";
+import { logger } from '../utils/log.js';
 
-const pkg = require('bignumber.js');
-const { BigNumber } = pkg;
+import BigNumber from 'bignumber.js';
+
+import * as wasm from '../perf_meter/pkg/perf_meter.js';
 
 const ShowDebug = true; // move to config
 
@@ -41,11 +42,15 @@ async function mainV3() {
     // ==========================================================
 
     //TODO: Add algorithm for shufling and add labels for pools
-    resultsV3 = [];
+    const perf = new wasm.PerfMeter();
+    perf.start("block0");
+    let resultsV3 = [];
     for (const pool of poolsV3) {
       const prices = await pool.fetchV3PoolPrice();
       resultsV3.push(prices);
     }
+    perf.stop("block0");
+    console.log(`block0 duration: ${perf.get_last("block0").toFixed(2)} ms`);
 
     const [poolB, poolC] = resultsV3;
     const priceA = parseFloat(poolB.NormalizedPrice);
@@ -107,7 +112,7 @@ async function mainV2() {
     // ===============      UNISWAP V2 LOGIC       ==============
     // ==========================================================
 
-    resultsV2 = [];
+    let resultsV2 = [];
     for (const pool of poolsV2) {
       const prices = await pool.fetchV2PoolPrice();
       resultsV2.push(prices);
@@ -192,4 +197,4 @@ async function calculateLoanFeeV3(loanAmount, tokenPrice) {
   }
 }
 
-module.exports = { mainV3, mainV2 };
+export { mainV3, mainV2 };

@@ -1,6 +1,5 @@
-const dotenv = require("dotenv");
-const winston = require("winston");
-const { createLogger, format, transports } = winston;
+import dotenv from "dotenv";
+import winston, { createLogger, format, transports } from "winston";
 
 dotenv.config();
 
@@ -28,7 +27,7 @@ const logger = createLogger({
   rejectionHandlers: [new transports.File({ filename: "logs/rejections.log" })],
 });
 
-module.exports = { logger };
+export { logger };
 
 colorizer.addColors({
     info: "cyan",

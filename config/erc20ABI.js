@@ -59,4 +59,4 @@ const ERC20_ABI = [
     }
   ];
   
-module.exports = { ERC20_ABI };
+export { ERC20_ABI };

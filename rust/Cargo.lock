@@ -2661,8 +2661,10 @@ dependencies = [
  "anyhow",
  "dotenv",
  "ethers",
+ "js-sys",
  "rust_decimal",
  "tokio",
+ "wasm-bindgen",
 ]
 
 [[package]]

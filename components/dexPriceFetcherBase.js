@@ -1,7 +1,7 @@
-const { ethers } = require('ethers');
-const { ERC20_ABI } = require('../config/erc20ABI.js');
-const { UNISWAP_V3_POOL_ABI } = require('../config/uniswapV3PoolABI.js');
-const { logger } = require('../utils/log.js');
+import { ethers } from 'ethers';
+import { ERC20_ABI } from '../config/erc20ABI.js';
+import { UNISWAP_V3_POOL_ABI } from '../config/uniswapV3PoolABI.js';
+import { logger } from '../utils/log.js';
 
 /**
  * DexPriceFetcherBase
@@ -77,4 +77,4 @@ class DexPriceFetcherBase {
 
 }
 
-module.exports = { DexPriceFetcherBase };
+export { DexPriceFetcherBase };
