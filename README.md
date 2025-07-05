@@ -157,4 +157,10 @@ await flashloanContract.requestFlashLoan(token0, token1, amount0, amount1);
 npx hardhat run scripts/deploy.js --network <your_network>
 ```
 
+## 📤 Run with Perf
+
+```bash
+node --experimental-wasm-modules arbitrageMonitor.js
+```
+
 ---

@@ -1,5 +1,6 @@
+import fs from 'fs';
 import { DexPriceFetcherV3 } from './dexPriceFetcherV3.js';
-import  { DexPriceFetcherV2 } from './dexPriceFetcherV2.js';
+import { DexPriceFetcherV2 } from './dexPriceFetcherV2.js';
 
 import { TOKEN_ETH, TOKEN_ARB } from '../config/tokens.js';
 import { ETH_NETWORK_POOL, ARB_NETWORK_POOL } from '../config/liquidityPool.js';
@@ -11,6 +12,8 @@ import { logger } from '../utils/log.js';
 import BigNumber from 'bignumber.js';
 
 import * as wasm from '../perf_meter/pkg/perf_meter.js';
+const perf = new wasm.PerfMeter();
+const writeFileDestination = '../perf-viewer/src/perf_metrics.json'
 
 const ShowDebug = true; // move to config
 
@@ -42,25 +45,31 @@ async function mainV3() {
     // ==========================================================
 
     //TODO: Add algorithm for shufling and add labels for pools
-    const perf = new wasm.PerfMeter();
-    perf.start("block0");
+
     let resultsV3 = [];
+
+    perf.start("fetchV3PoolPriceFor2Pools");
     for (const pool of poolsV3) {
       const prices = await pool.fetchV3PoolPrice();
       resultsV3.push(prices);
     }
-    perf.stop("block0");
-    console.log(`block0 duration: ${perf.get_last("block0").toFixed(2)} ms`);
+    perf.stop("fetchV3PoolPriceFor2Pools");
+    //console.log(`fetchV3PoolPrice2Pools duration: ${perf.get_last("fetchV3PoolPrice2Pools").toFixed(4)} ms`);
 
     const [poolB, poolC] = resultsV3;
     const priceA = parseFloat(poolB.NormalizedPrice);
     const priceB = parseFloat(poolC.NormalizedPrice);
-    const spread = Math.abs(priceA - priceB);
-    const totalFees = (priceA * FEE_UNISWAP_V3) + (priceB * FEE_SUSHISWAP_V3);
+    const spread = 1;//Math.abs(priceA - priceB);
+    const totalFees = 0;//(priceA * FEE_UNISWAP_V3) + (priceB * FEE_SUSHISWAP_V3);
 
     if (spread > totalFees) {
+      perf.start("simulateTradeLoopFor1Pool");
       const priceMovementB = await poolsV3[0].simulateTradeLoop(LOAN_V3, 0, ShowDebug);
+      perf.stop("simulateTradeLoopFor1Pool");
+
+      perf.start("simulateTradeLoopFor2Pool");
       const priceMovementC = await poolsV3[1].simulateTradeLoop(LOAN_V3, 1, ShowDebug);
+      perf.stop("simulateTradeLoopFor2Pool");
 
       const priceB = new BigNumber(priceMovementB.AverageSellPriceForFirstPool);
       const priceC = new BigNumber(priceMovementC.AverageBuyPriceForSecondPool);
@@ -113,10 +122,13 @@ async function mainV2() {
     // ==========================================================
 
     let resultsV2 = [];
+
+    perf.start("fetchV2PoolPriceFor2Pools");
     for (const pool of poolsV2) {
       const prices = await pool.fetchV2PoolPrice();
       resultsV2.push(prices);
     }
+    perf.stop("fetchV2PoolPriceFor2Pools");
 
     const [poolBV2, poolCV2] = resultsV2;
     const reserveB0 = BigInt(Math.floor(Number(poolBV2.TokenBalance0) * 10 ** poolBV2.TokenDecimals0));
@@ -125,8 +137,13 @@ async function mainV2() {
     const reserveC0 = BigInt(Math.floor(Number(poolCV2.TokenBalance0) * 10 ** poolBV2.TokenDecimals0));
     const reserveC1 = BigInt(Math.floor(Number(poolCV2.TokenBalance1) * 10 ** poolCV2.TokenDecimals1));
 
+    perf.start("SimulatePriceAfterSwapFor1Pools");
     const poolBV2Result = poolsV2[0].simulatePriceAfterSwap(reserveB0, reserveB1, LOAN_V2, poolBV2.TokenDecimals0, poolBV2.TokenDecimals1, false, ShowDebug);
+    perf.stop("SimulatePriceAfterSwapFor1Pools");
+
+    perf.start("SimulatePriceAfterSwapFor2Pools");
     const poolCV2Result = poolsV2[1].simulatePriceAfterSwap(reserveC1, reserveC0, 2400, poolCV2.TokenDecimals1, poolCV2.TokenDecimals0, true, ShowDebug);
+    perf.stop("SimulatePriceAfterSwapFor2Pools");
 
     const currentEthPrice = await poolsV2[0].getCurrentEthPrice(ARB_NETWORK_POOL.UNISWAP_ETH_V3);
     const gasPrice = await calculateGasPrice(currentEthPrice.CurrentPrice);
@@ -145,22 +162,25 @@ async function mainV2() {
       logger.info("AmountDifference: " + amountDifference.toFixed(2));
     }
 
-     const isArbitrageProfitable = profit > 0;
+    const isArbitrageProfitable = profit > 0;
 
-     return {
-        SellOutPriceBefore: sellOut.priceBefore,
-        SellOutPriceAfter: sellOut.priceAfter,
-        SellOutAveragePrice: sellOut.AveragePrice,
+    const perf_json = perf.export_to_json();
+    fs.writeFileSync(writeFileDestination, perf_json);
 
-        BuyInPriceBefore: buyIn.priceBefore,
-        BuyInPriceAfter: buyIn.priceAfter,
-        BuyInAveragePrice: buyIn.AveragePrice,
+    return {
+      SellOutPriceBefore: sellOut.priceBefore,
+      SellOutPriceAfter: sellOut.priceAfter,
+      SellOutAveragePrice: sellOut.AveragePrice,
 
-        PriceDifference: amountDifference.toFixed(6),
-        FinalAmountProfit: profit.toFixed(6),
-        Loan: LOAN_V2,
-        ArbitrageProfitable: isArbitrageProfitable
-      }
+      BuyInPriceBefore: buyIn.priceBefore,
+      BuyInPriceAfter: buyIn.priceAfter,
+      BuyInAveragePrice: buyIn.AveragePrice,
+
+      PriceDifference: amountDifference.toFixed(6),
+      FinalAmountProfit: profit.toFixed(6),
+      Loan: LOAN_V2,
+      ArbitrageProfitable: isArbitrageProfitable
+    }
   } catch (err) {
     logger.error(`[ArbitrageMonitor]: Failed to fetch price from pool (${this.poolAddress}): ${err.message}`);
     return null;
