@@ -2,7 +2,7 @@
 # 💸 Flashloan Arbitrage Bot on Uniswap V3
 
 This project contains a Solidity smart contract that performs flashloans via Uniswap V3 and enables arbitrage between tokens.  
-The off-chain logic (e.g., arbitrage opportunity detection) is handled by an external C++ or JavaScript bot.
+The off-chain logic (e.g., arbitrage opportunity detection) is handled by an external Rust or JavaScript bot.
 
 ---
 
@@ -43,18 +43,59 @@ npm install @uniswap/v3-core @uniswap/v3-periphery
 
 ```bash
 .
-├── contracts/
-│   ├── FlashloanArbitrage.sol       # Main contract
-│   ├── ERC20Mock.sol                # Mock token for testing
-│   ├── SwapRouterMock.sol           # Mock Uniswap V3 router
-│   └── UniswapPoolMock.sol          # Mock Uniswap V3 pool
-├── test/
-│   └── FlashloanArbitrage.js   # Test suite
-├── hardhat.config.js                # Hardhat config
-├── .env                             # Environment variables
+├── artifacts/                          # Hardhat artifacts and build output
+├── cache/                              # Hardhat cache
+├── components/                         # JS logic for arbitrage and price fetching
+│   ├── arbitrageMonitor.js
+│   ├── calculateArbitrage.js
+│   ├── dexPriceFetcherBase.js
+│   ├── dexPriceFetcherV2.js
+│   ├── dexPriceFetcherV3.js
+│   ├── initArbEngineCore.js
+│   └── perf_metrics.json              # Output performance metrics in JSON
+├── config/                             # Network and contract configurations
+│   ├── erc20ABI.js
+│   ├── liquidityPool.js
+│   ├── routers.js
+│   ├── rpcNetworks.js
+│   ├── tokens.js
+│   ├── uniswapV2PoolABI.js
+│   └── uniswapV3PoolABI.js
+├── contracts/                          # Solidity smart contracts
+│   ├── ERC20Mock.sol
+│   ├── FlashloanArbitrage.sol
+│   ├── FlashSwapArbitrageV2.sol
+│   ├── FlashSwapArbitrageV3.sol
+│   ├── SwapRouterMock.sol
+│   └── UniswapPoolMock.sol
+├── logs/                               # Custom logs and analytics
+├── node_modules/
+├── perf_meter/                         # Rust-based WASM performance meter
+│   ├── pkg/
+│   ├── src/
+│   ├── target/
+│   ├── Cargo.lock
+│   └── Cargo.toml
+├── perf-viewer/                        # EGUI/eframe Rust GUI for visualizing performance
+│   ├── src/
+│   ├── target/
+│   ├── Cargo.lock
+│   └── Cargo.toml
+├── rust/                               # Reserved for custom native logic
+├── test/                               # JavaScript test files
+│   ├── FlashloanArbitrageV2Test.cjs
+│   └── FlashloanArbitrageV3Test.cjs
+├── utils/                              # Utility modules
+│   └── log.js
+├── workers/                            # (Empty) for background job runners
+├── .env                                # Environment variables
+├── .gitignore
+├── hardhat.config.cjs                  # Hardhat configuration
+├── index.js                            # Entry point (optional CLI/server)
+├── LICENSE
 ├── package.json
+├── package-lock.json
 └── README.md
-└── index.js
 ```
 
 ### 🧪 Compile & Test
@@ -104,12 +145,14 @@ npx hardhat test
 ## 📘 Info: `requestFlashLoan`
 
 ```solidity
-function requestFlashLoan(
-    address token0,
-    address token1,
-    uint256 amount0,
-    uint256 amount1
-) external onlyOwner
+function flashSwap(
+        address pool0,
+        address pool1,
+        address pool2,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) external
 ```
 
 ### Description
@@ -118,13 +161,13 @@ Triggers a flashloan from a Uniswap V3 pool, borrowing `token0` and/or `token1`.
 ### Parameters
 | Name      | Type      | Description                                                  |
 |-----------|-----------|--------------------------------------------------------------|
-| `token0`  | `address` | The address of the token to borrow as `amount0`              |
-| `token1`  | `address` | The address of the token to borrow as `amount1` (optional)   |
-| `amount0` | `uint256` | Amount of `token0` to borrow from the pool                  |
-| `amount1` | `uint256` | Amount of `token1` to borrow from the pool                  |
+| `pool0`   | `address` | Address of the Uniswap V3 pool to borrow from                |
+| `pool1`   | `address` | Pool to sell tokenIn for tokenOut                            |
+| `pool2`   | `address` | Pool to buy back tokenIn using tokenOut                      |
+| `tokenIn` | `uint256` | Token to borrow (and return at the end)                      |
+| `tokenOut`| `uint256` | Intermediate token used for the swap path                    |
+| `amountIn`| `uint256` | Amount of tokenIn to borrow from pool0                       |
 
-### Access Control
-- ✅ Only callable by the contract owner
 
 ### Internally
 1. Encodes data and calls the pool’s `flash()` method
@@ -141,7 +184,7 @@ Triggers a flashloan from a Uniswap V3 pool, borrowing `token0` and/or `token1`.
 await flashloanContract.deploy(poolAddress, routerAddress);
 ```
 
-2. C++ or JS bot monitors on-chain prices
+2. Rust bot monitors on-chain prices
 3. If profitable arbitrage is found, bot calls:
 ```js
 await flashloanContract.requestFlashLoan(token0, token1, amount0, amount1);
@@ -162,5 +205,7 @@ npx hardhat run scripts/deploy.js --network <your_network>
 ```bash
 node --experimental-wasm-modules arbitrageMonitor.js
 ```
+
+![Performance Chart](perf_demo.png)
 
 ---
