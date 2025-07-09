@@ -152,4 +152,7 @@ node_modules
 
 # Hardhat Ignition default folder for deployments against a local node
 ignition/deployments/chain-31337
-rust/target/
+rust/target
+
+pref-viewer/target
+pref_meter/target
