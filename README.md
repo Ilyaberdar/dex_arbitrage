@@ -206,6 +206,6 @@ npx hardhat run scripts/deploy.js --network <your_network>
 node --experimental-wasm-modules arbitrageMonitor.js
 ```
 
-![Performance Chart](perf_demo.png)
+![Performance Chart](demo.png)
 
 ---
