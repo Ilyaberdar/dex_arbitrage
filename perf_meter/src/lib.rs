@@ -1,20 +1,28 @@
 use wasm_bindgen::prelude::*;
-use js_sys::{Date, Array};
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 
-#[wasm_bindgen]
 #[derive(Default)]
-pub struct PerfMeter {
-    start_times: HashMap<String, f64>,
-    durations: HashMap<String, Vec<f64>>, // ms
+pub struct PerfEntry {
+    pub durations: Vec<f64>,
+    pub curve: Option<Vec<f64>>,
 }
 
-#[derive(Serialize)]
-struct LabelDurations {
-    label: String,
-    avg_ms: f64,
-    last_ms: f64,
+impl PerfEntry {
+    pub fn avg(&self) -> f64 {
+        let sum: f64 = self.durations.iter().sum();
+        sum / self.durations.len().max(1) as f64
+    }
+
+    pub fn last(&self) -> f64 {
+        *self.durations.last().unwrap_or(&0.0)
+    }
+}
+
+#[wasm_bindgen]
+pub struct PerfMeter {
+    entries: HashMap<String, PerfEntry>,
+    start_times: HashMap<String, f64>,
 }
 
 #[wasm_bindgen]
@@ -22,69 +30,55 @@ impl PerfMeter {
     #[wasm_bindgen(constructor)]
     pub fn new() -> PerfMeter {
         PerfMeter {
+            entries: HashMap::new(),
             start_times: HashMap::new(),
-            durations: HashMap::new(),
         }
     }
 
-    pub fn start(&mut self, label: String) {
-        let now = Date::now();
-        self.start_times.insert(label, now);
+    pub fn start(&mut self, label: &str) {
+        let now = js_sys::Date::now();
+        self.start_times.insert(label.to_string(), now);
     }
 
-    pub fn stop(&mut self, label: String) {
-        if let Some(start_time) = self.start_times.remove(&label) {
-            let now = Date::now();
-            let duration = now - start_time;
-            self.durations.entry(label).or_default().push(duration);
+    pub fn stop(&mut self, label: &str) {
+        let now = js_sys::Date::now();
+        if let Some(start) = self.start_times.remove(label) {
+            let duration = now - start;
+            let entry = self.entries.entry(label.to_string()).or_default();
+            entry.durations.push(duration);
         }
     }
 
-    pub fn get_last(&self, label: String) -> f64 {
-        self.durations
-            .get(&label)
-            .and_then(|d| d.last().copied())
-            .unwrap_or(0.0)
+    pub fn add_curve(&mut self, label: &str, values: js_sys::Array) {
+        let curve = values.iter()
+            .filter_map(|val| val.as_f64())
+            .collect::<Vec<f64>>();
+
+        let entry = self.entries.entry(label.to_string()).or_default();
+        entry.curve = Some(curve);
     }
 
-    pub fn get_avg(&self, label: String) -> f64 {
-        self.durations
-            .get(&label)
-            .map(|vec| {
-                let total: f64 = vec.iter().sum();
-                total / vec.len() as f64
-            })
-            .unwrap_or(0.0)
-    }
+    pub fn export_json(&self) -> JsValue {
+        let output: Vec<_> = self.entries.iter().map(|(label, entry)| {
+            let mut out = serde_json::Map::new();
+            out.insert("label".to_string(), serde_json::Value::String(label.clone()));
+            out.insert("avg_ms".to_string(), serde_json::Value::from(entry.avg()));
+            out.insert("last_ms".to_string(), serde_json::Value::from(entry.last()));
 
-    pub fn reset(&mut self, label: String) {
-        self.durations.remove(&label);
-    }
-
-    pub fn clear_all(&mut self) {
-        self.start_times.clear();
-        self.durations.clear();
-    }
-
-    pub fn export_to_json(&self) -> String {
-        let results: Vec<LabelDurations> = self.durations.iter().map(|(label, durations)| {
-            let total: f64 = durations.iter().sum();
-            let avg = total / durations.len() as f64;
-            let last = durations.last().copied().unwrap_or(0.0);
-            LabelDurations {
-                label: label.clone(),
-                avg_ms: avg,
-                last_ms: last,
+            if let Some(curve) = &entry.curve {
+                let key = if label.contains("1Pool") {
+                    "price_curve_sell"
+                } else if label.contains("2Pool") {
+                    "price_curve_buy"
+                } else {
+                    "price_curve"
+                };
+                out.insert(key.to_string(), serde_json::to_value(curve).unwrap());
             }
+
+            serde_json::Value::Object(out)
         }).collect();
 
-        serde_json::to_string(&results).unwrap_or("[]".into())
-    }
-
-    pub fn get_all_labels(&self) -> Array {
-        self.durations
-            .keys()
-            .map(|k| JsValue::from(k.clone()))
-            .collect()
+        JsValue::from_serde(&output).unwrap()
     }
 }

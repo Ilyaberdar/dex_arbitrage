@@ -5,12 +5,20 @@ dotenv.config();
 
 const colorizer = format.colorize();
 
+colorizer.addColors({
+  info: "cyan",
+  warn: "yellow",
+  error: "magenta",
+  engine: "green"
+});
+
 const logFormat = format.combine(
   format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
   format.errors({ stack: true }),
   format.splat(),
-  format.printf(({ timestamp, level, message, stack }) => {
-    const base = `${timestamp} [${level.toUpperCase()}]: ${stack || message}`;
+  format.printf(({ timestamp, level, message, stack, label }) => {
+    const category = label || level;
+    const base = `${timestamp} [${category.toUpperCase()}]: ${stack || message}`;
     return colorizer.colorize(level, base);
   })
 );
@@ -20,17 +28,26 @@ const logger = createLogger({
   format: logFormat,
   transports: [
     new transports.Console(),
+
     new transports.File({ filename: "logs/combined.log" }),
     new transports.File({ filename: "logs/error.log", level: "error" }),
+
+    new transports.File({
+      filename: "logs/engine.log",
+      level: "info",
+      format: format.combine(
+        format((info) => (info.label === "engine" ? info : false))(), // Фильтр
+        logFormat
+      )
+    })
   ],
+
   exceptionHandlers: [new transports.File({ filename: "logs/exceptions.log" })],
   rejectionHandlers: [new transports.File({ filename: "logs/rejections.log" })],
 });
 
-export { logger };
+function getLogger(label) {
+  return logger.child({ label });
+}
 
-colorizer.addColors({
-    info: "cyan",
-    warn: "yellow",
-    error: "magenta"
-  });
+export { logger, getLogger };

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { DexPriceFetcherV3 } from './dexPriceFetcherV3.js';
 import { DexPriceFetcherV2 } from './dexPriceFetcherV2.js';
+import { initArbEngineCore } from './initArbEngineCore.js';
 
 import { TOKEN_ETH, TOKEN_ARB } from '../config/tokens.js';
 import { ETH_NETWORK_POOL, ARB_NETWORK_POOL } from '../config/liquidityPool.js';
@@ -23,7 +24,7 @@ const FEE_SUSHISWAP_V3 = 0.0005; // move to config
 const LOAN_V3 = 1;
 
 const poolsV3 = [
-  //new DexPriceFetcherV3(RPC.ETHEREUM, ETH_NETWORK_POOL.UNISWAP_WBTC, TOKEN_ETH.WBTC, TOKEN_ETH.USDC, 0.03),
+  new DexPriceFetcherV3(RPC.ARBITRUM, ARB_NETWORK_POOL.PANCAKESWAP_ETH_V3, TOKEN_ARB.WETH, TOKEN_ARB.USDC, FEE_UNISWAP_V3),
   new DexPriceFetcherV3(RPC.ARBITRUM, ARB_NETWORK_POOL.UNISWAP_ETH_V3, TOKEN_ARB.WETH, TOKEN_ARB.USDC, FEE_UNISWAP_V3),
   new DexPriceFetcherV3(RPC.ARBITRUM, ARB_NETWORK_POOL.SUSHISWAP_ETH_V3, TOKEN_ARB.WETH, TOKEN_ARB.USDC, FEE_SUSHISWAP_V3),
 ];
@@ -46,6 +47,8 @@ async function mainV3() {
 
     //TODO: Add algorithm for shufling and add labels for pools
 
+    //const profitablePaths = await initArbEngineCore(poolsV3, LOAN_V3);
+
     let resultsV3 = [];
 
     perf.start("fetchV3PoolPriceFor2Pools");
@@ -65,10 +68,38 @@ async function mainV3() {
     if (spread > totalFees) {
       perf.start("simulateTradeLoopFor1Pool");
       const priceMovementB = await poolsV3[0].simulateTradeLoop(LOAN_V3, 0, ShowDebug);
+
+      const initial = Number(priceMovementB.InitialPriceForFirstPool);
+      const final = Number(priceMovementB.FinalPriceForFirstPool);
+      const steps = 10;
+
+      const sellPriceCurve = [];
+
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const price = final + (initial - final) / (1 + 10 * t);
+        sellPriceCurve.push(price);
+      }
+
+      perf.add_curve("simulateTradeLoopFor1Pool", sellPriceCurve);
       perf.stop("simulateTradeLoopFor1Pool");
 
       perf.start("simulateTradeLoopFor2Pool");
       const priceMovementC = await poolsV3[1].simulateTradeLoop(LOAN_V3, 1, ShowDebug);
+
+      const initialBuy = Number(priceMovementB.InitialPriceForFirstPool);
+      const finalBuy = Number(priceMovementB.FinalPriceForFirstPool);
+      const stepsBuy = 10;
+
+      const buyPriceCurve = [];
+
+      for (let i = 0; i <= stepsBuy; i++) {
+        const t = i / stepsBuy;
+        const price = initialBuy + (finalBuy - initialBuy) / (1 + 10 * (1 - t));
+        buyPriceCurve.push(price);
+      }
+
+      perf.add_curve("simulateTradeLoopFor2Pool", buyPriceCurve);
       perf.stop("simulateTradeLoopFor2Pool");
 
       const priceB = new BigNumber(priceMovementB.AverageSellPriceForFirstPool);
@@ -164,8 +195,9 @@ async function mainV2() {
 
     const isArbitrageProfitable = profit > 0;
 
-    const perf_json = perf.export_to_json();
-    fs.writeFileSync(writeFileDestination, perf_json);
+    const perf_json = perf.export_json();
+    const str = JSON.stringify(perf_json);
+    fs.writeFileSync(writeFileDestination, str);
 
     return {
       SellOutPriceBefore: sellOut.priceBefore,
