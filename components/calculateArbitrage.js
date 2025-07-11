@@ -23,6 +23,7 @@ const FEE_UNISWAP_V3 = 0.0001; // move to config
 const FEE_SUSHISWAP_V3 = 0.0005; // move to config
 const LOAN_V3 = 1;
 
+// Read from file
 const poolsV3 = [
   new DexPriceFetcherV3(RPC.ARBITRUM, ARB_NETWORK_POOL.PANCAKESWAP_ETH_V3, TOKEN_ARB.WETH, TOKEN_ARB.USDC, FEE_UNISWAP_V3),
   new DexPriceFetcherV3(RPC.ARBITRUM, ARB_NETWORK_POOL.UNISWAP_ETH_V3, TOKEN_ARB.WETH, TOKEN_ARB.USDC, FEE_UNISWAP_V3),
@@ -41,14 +42,14 @@ const poolsV2 = [
 
 async function mainV3() {
   try {
-    // ==========================================================
-    // ===============      UNISWAP V3 LOGIC       ==============
-    // ==========================================================
+    // =================================================================
+    // ===============      UNISWAP V3 Start Engine       ==============
+    // =================================================================
 
-    //TODO: Add algorithm for shufling and add labels for pools
+    const profitablePaths = await initArbEngineCore(poolsV3, LOAN_V3);
+    
 
-    //const profitablePaths = await initArbEngineCore(poolsV3, LOAN_V3);
-
+    /*
     let resultsV3 = [];
 
     perf.start("fetchV3PoolPriceFor2Pools");
@@ -57,13 +58,12 @@ async function mainV3() {
       resultsV3.push(prices);
     }
     perf.stop("fetchV3PoolPriceFor2Pools");
-    //console.log(`fetchV3PoolPrice2Pools duration: ${perf.get_last("fetchV3PoolPrice2Pools").toFixed(4)} ms`);
 
     const [poolB, poolC] = resultsV3;
     const priceA = parseFloat(poolB.NormalizedPrice);
     const priceB = parseFloat(poolC.NormalizedPrice);
-    const spread = 1;//Math.abs(priceA - priceB);
-    const totalFees = 0;//(priceA * FEE_UNISWAP_V3) + (priceB * FEE_SUSHISWAP_V3);
+    const spread = Math.abs(priceA - priceB);
+    const totalFees = (priceA * FEE_UNISWAP_V3) + (priceB * FEE_SUSHISWAP_V3);
 
     if (spread > totalFees) {
       perf.start("simulateTradeLoopFor1Pool");
@@ -140,6 +140,7 @@ async function mainV3() {
         ArbitrageProfitable: isArbitrageProfitable
       }
     }
+      */
   } catch (err) {
     logger.error(`[ArbitrageMonitor]: Failed to fetch price from pool (${this.poolAddress}): ${err.message}`);
     return null;
